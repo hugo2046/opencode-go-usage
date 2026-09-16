@@ -2,18 +2,13 @@
 
 opencode TUI 插件：在侧栏展示 OpenCode Go 套餐的 5 小时 / 每周 / 每月额度。
 
-<img src="images/sidebar-go-usage.png" alt="opencode 侧栏底部的 OpenCode Go 额度小节，位于 Context / MCP / LSP 之下，三档额度各含标签、百分比、进度条与重置倒计时" width="340">
+<img src="images/sidebar-go-usage.png" alt="opencode 侧栏里的 OpenCode Go 额度小节，detailed 样式：每档三行，标签与百分比一行、进度条一行、重置倒计时一行" width="340">
 
-## 显示内容
+> 上图是 `detailed` 样式。默认的 `compact` 样式是一行一档，见下面的[配置](#配置)。
 
-```
-OpenCode Go
-滚动  █░░░░░░░░░░░░░   8%   4h58m
-本周  ████████░░░░░░  55%   4d10h
-本月  ████░░░░░░░░░░  27%  27d16h
-```
+每档展示标签、实心进度条、百分比、重置倒计时。有 `compact`（一行一档，默认）与 `detailed`（三行一档）两种样式，见[配置](#配置)。
 
-一行一档：标签、实心进度条、百分比、重置倒计时。进度条是带背景色的实心色块（不是 `█` 字符），颜色全部取自主题的语义 token，所以深色浅色主题都自动跟随。渲染在 `sidebar_content` slot，紧随 opencode 自带的 `Context` / `MCP` / `LSP` 小节之后；节标题的颜色与粗体跟它们一致。
+进度条是带背景色的实心色块（不是 `█` 字符），颜色全部取自主题的语义 token，所以深色浅色主题都自动跟随。渲染在 `sidebar_content` slot；节标题的颜色与粗体跟宿主的 `Context` / `MCP` / `LSP` 一致。
 
 ## 文档
 
@@ -58,7 +53,7 @@ cd "$REPO" && bun install
 
 所以 `opencode auth login` 登录过 OpenCode Go 就是零配置。
 
-`auth.json` 在 opencode 的 **data** 目录（macOS/Linux 是 `$XDG_DATA_HOME/opencode`，默认 `~/.local/share/opencode`），**不是** `api.state.path.state` 指向的 state 目录（`~/.local/state/opencode`）。插件按候选列表顺序找，data 目录优先。完整规则见[配置与行为契约 §2](docs/配置与行为契约_20260916.md#2-密钥解析)。
+`auth.json` 在 opencode 的 **data** 目录（macOS/Linux 是 `$XDG_DATA_HOME/opencode`，默认 `~/.local/share/opencode`），**不是** `api.state.path.state` 指向的 state 目录（`~/.local/state/opencode`）。插件按候选列表顺序找，data 目录优先。完整规则见[配置与行为契约 §3](docs/配置与行为契约_20260916.md#3-密钥解析)。
 
 ## 刷新
 
@@ -67,13 +62,57 @@ cd "$REPO" && bun install
 - 倒计时文本每 60 秒本地重算，不发请求；
 - 网络错误或 5xx 时保留上次数值，标题显示为 `OpenCode Go !`。
 
+## 配置
+
+把 `~/.config/opencode/tui.json` 里的插件项从字符串改成 `[路径, 配置]` 两元数组：
+
+```jsonc
+{
+  "$schema": "https://opencode.ai/tui.json",
+  "plugin": [
+    ["/绝对路径/opencode-go-usage/tui.tsx", { "style": "detailed", "order": 600 }]
+  ]
+}
+```
+
+| 字段 | 取值 | 默认 | 说明 |
+|---|---|---|---|
+| `style` | `"compact"` \| `"detailed"` | `"compact"` | 展示样式，见下 |
+| `order` | 数字 | `350` | 侧栏位置。`350` 在 LSP 与 Todo 之间；`600` 沉到最底。完整 order 表见[配置与行为契约 §5](docs/配置与行为契约_20260916.md#5-侧栏排序契约) |
+
+改完**重启 opencode**（`tui.json` 只在启动时读）。值写错会静默回退到默认，不会让插件加载失败。
+
+### 两种样式
+
+**`compact`（默认）** —— 一行一档，占 3 行：
+
+```
+OpenCode Go
+滚动  █░░░░░░░░░░░░░   8%   4h58m
+本周  ████████░░░░░░  55%   4d10h
+本月  ████░░░░░░░░░░  27%  27d16h
+```
+
+**`detailed`** —— 三行一档，占 9 行；条子更长（20 格），标签与倒计时用完整措辞：
+
+```
+OpenCode Go
+5 小时用量           8%
+██░░░░░░░░░░░░░░░░░░
+重置于 4 小时 58 分钟
+每周用量            55%
+███████████░░░░░░░░░
+重置于 4 天 10 小时
+每月用量            27%
+█████░░░░░░░░░░░░░░░
+重置于 27 天 16 小时
+```
+
+两种样式的进度条都是带背景色的实心色块，配色也一致（见[配置与行为契约 §6](docs/配置与行为契约_20260916.md#6-渲染规格)）；区别只在信息密度与占用行数。
+
 ## 已知限制
 
 上游 `/zen/go/v1/usage` 只返回**整数**百分比与 `resetsAt`，不返回 token 数或金额。opencode 官方 web dashboard 显示的一位小数（如 `8.1%`）来自另一条更精细的通路，本插件取不到，因此只显示 `8%`。
-
-## 侧栏位置
-
-用 `order: 350`，落在内置 `LSP`(300) 与 `Todo`(400) 之间。这是与宿主的隐式契约——`sidebar_content` 按 `order` 升序排，宿主升级调整内置 order 时需要复核。完整 order 表与改法见[配置与行为契约 §4](docs/配置与行为契约_20260916.md#4-侧栏排序契约)。
 
 ## 测试
 

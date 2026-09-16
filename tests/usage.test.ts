@@ -5,6 +5,7 @@ import { join } from "node:path"
 import {
   AUTH_PROVIDER,
   DEFAULT_BASE_URL,
+  ROWS,
   ENV_KEY,
   createRefresher,
   defaultStateDir,
@@ -15,6 +16,7 @@ import {
   formatCountdownShort,
   formatPercent,
   hasEnoughContrast,
+  parseOptions,
   relativeLuma,
   resolveKey,
   toneOf,
@@ -543,5 +545,67 @@ describe("barFilled", () => {
       expect(n).toBeGreaterThanOrEqual(0)
       expect(n).toBeLessThanOrEqual(14)
     }
+  })
+})
+
+describe("parseOptions", () => {
+  test("缺省时给出默认值：紧凑样式 + order 350", () => {
+    expect(parseOptions(undefined)).toEqual({ style: "compact", order: 350 })
+    expect(parseOptions(null)).toEqual({ style: "compact", order: 350 })
+    expect(parseOptions({})).toEqual({ style: "compact", order: 350 })
+  })
+
+  test("识别两种样式", () => {
+    expect(parseOptions({ style: "compact" }).style).toBe("compact")
+    expect(parseOptions({ style: "detailed" }).style).toBe("detailed")
+  })
+
+  test("样式写错时回退到 compact 而不是抛错", () => {
+    for (const bad of ["Detailed", "bogus", "", 1, true, null, {}, []]) {
+      expect(parseOptions({ style: bad }).style).toBe("compact")
+    }
+  })
+
+  test("order 可覆盖", () => {
+    expect(parseOptions({ order: 600 }).order).toBe(600)
+    expect(parseOptions({ order: 0 }).order).toBe(0)
+    expect(parseOptions({ order: -10 }).order).toBe(-10)
+  })
+
+  test("order 非有限数字时回退到 350", () => {
+    for (const bad of ["600", Number.NaN, Number.POSITIVE_INFINITY, null, {}, []]) {
+      expect(parseOptions({ order: bad }).order).toBe(350)
+    }
+  })
+
+  test("两项可同时给", () => {
+    expect(parseOptions({ style: "detailed", order: 600 })).toEqual({
+      style: "detailed",
+      order: 600,
+    })
+  })
+
+  test("整体不是对象时也不抛错", () => {
+    for (const bad of ["compact", 42, true, [], () => {}]) {
+      expect(parseOptions(bad)).toEqual({ style: "compact", order: 350 })
+    }
+  })
+
+  test("忽略不认识的字段", () => {
+    expect(parseOptions({ style: "detailed", nope: 1, barWidth: 99 })).toEqual({
+      style: "detailed",
+      order: 350,
+    })
+  })
+})
+
+describe("ROWS 的两套标签", () => {
+  test("每档都有紧凑标签与详细标签", () => {
+    expect(ROWS.map((r) => r.label)).toEqual(["滚动", "本周", "本月"])
+    expect(ROWS.map((r) => r.labelLong)).toEqual(["5 小时用量", "每周用量", "每月用量"])
+  })
+
+  test("紧凑标签都是 2 个中文字符（等宽 4 列，布局预算依赖这一点）", () => {
+    for (const r of ROWS) expect(r.label.length).toBe(2)
   })
 })

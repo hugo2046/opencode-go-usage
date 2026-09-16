@@ -283,9 +283,9 @@ export const BAR_WIDTH = 14
 
 /** 侧栏三行的渲染顺序与中文标签。 */
 export const ROWS = [
-  { key: "rolling", label: "滚动" },
-  { key: "weekly", label: "本周" },
-  { key: "monthly", label: "本月" },
+  { key: "rolling", label: "滚动", labelLong: "5 小时用量" },
+  { key: "weekly", label: "本周", labelLong: "每周用量" },
+  { key: "monthly", label: "本月", labelLong: "每月用量" },
 ] as const
 
 /** 进度条色调，由 tui.tsx 映射到主题色。 */
@@ -457,4 +457,57 @@ export function hasEnoughContrast(
   const lb = relativeLuma(b)
   if (!Number.isFinite(la) || !Number.isFinite(lb)) return false
   return Math.abs(la - lb) >= minDelta
+}
+
+/** 详细样式（样式 B）的进度条格数：它独占一行，所以可以比紧凑样式长。 */
+export const BAR_WIDTH_DETAILED = 20
+
+/** 可选的展示样式。 */
+export type StyleName = "compact" | "detailed"
+
+/** 插件配置，全部有默认值。 */
+export type PluginOptions = {
+  /**
+   * 展示样式。
+   *
+   * - `compact`（默认，样式 A）：一行一档 —— 标签、14 格实心条、百分比、紧凑倒计时
+   * - `detailed`（样式 B）：三行一档 —— 标签与百分比一行、20 格实心条一行、完整中文倒计时一行
+   */
+  style: StyleName
+  /** 侧栏 slot 的 order，决定小节排在哪两个内置小节之间。 */
+  order: number
+}
+
+/** `style` 缺省值。 */
+const DEFAULT_STYLE: StyleName = "compact"
+
+/** `order` 缺省值：落在内置 lsp(300) 与 todo(400) 之间。 */
+const DEFAULT_ORDER = 350
+
+/** 合法样式名集合，用于校验用户手写的配置。 */
+const STYLE_NAMES: readonly StyleName[] = ["compact", "detailed"]
+
+/**
+ * 解析 tui.json 里传给插件的 options。
+ *
+ * 入参来自用户手写的 JSON，所以任何形状都不能让它抛错：整体不是对象、字段
+ * 类型不对、样式名拼错，一律回退到默认值并继续渲染，而不是让插件加载失败。
+ *
+ * @param raw tui.json 中 `[spec, options]` 的第二项
+ * @returns 补全后的配置
+ */
+export function parseOptions(raw: unknown): PluginOptions {
+  const source =
+    raw !== null && typeof raw === "object" && !Array.isArray(raw)
+      ? (raw as Record<string, unknown>)
+      : {}
+  const style = source.style
+  const order = source.order
+  return {
+    style:
+      typeof style === "string" && (STYLE_NAMES as readonly string[]).includes(style)
+        ? (style as StyleName)
+        : DEFAULT_STYLE,
+    order: typeof order === "number" && Number.isFinite(order) ? order : DEFAULT_ORDER,
+  }
 }

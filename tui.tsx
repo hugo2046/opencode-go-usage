@@ -1,10 +1,11 @@
 /** @jsxImportSource @opentui/solid */
-/** opencode TUI 插件：在侧栏一行一档展示 OpenCode Go 的滚动 / 本周 / 本月额度。 */
+/** opencode TUI 插件：在侧栏展示 OpenCode Go 的三档额度，支持紧凑与详细两种样式。 */
 
 import type { TuiPlugin, TuiPluginModule, TuiTheme } from "@opencode-ai/plugin/tui"
 import { For, Show, createSignal } from "solid-js"
 import {
   BAR_WIDTH,
+  BAR_WIDTH_DETAILED,
   COUNTDOWN_WIDTH,
   DEFAULT_BASE_URL,
   ROWS,
@@ -12,9 +13,11 @@ import {
   createRefresher,
   defaultStateDir,
   fetchUsage,
+  formatCountdown,
   formatCountdownShort,
   formatPercent,
   hasEnoughContrast,
+  parseOptions,
   resolveKey,
   toneOf,
   type Tone,
@@ -59,35 +62,60 @@ function trackColor(theme: TuiTheme) {
 }
 
 /**
- * 单个额度窗口的一行展示：标签、实心进度条、百分比、紧凑倒计时。
+ * 两种样式共用的进度条：两段带背景色的实心色块。
+ *
+ * 用 bg + 空格而不是 █ 字符——色块之间没有字形缝隙，观感是连续实心条。
+ *
+ * @param props.theme TUI 主题对象
+ * @param props.percent 取已用百分比的 accessor
+ * @param props.tone 取色调名的 accessor
+ * @param props.width 总格数（紧凑样式 14，详细样式 20）
+ */
+function Bar(props: {
+  theme: TuiTheme
+  percent: () => number
+  tone: () => Tone
+  width: number
+}) {
+  const filled = () => barFilled(props.percent(), props.width)
+  return (
+    <box flexDirection="row">
+      <text bg={toneColor(props.theme, props.tone())}>{" ".repeat(filled())}</text>
+      <text bg={trackColor(props.theme)}>{" ".repeat(props.width - filled())}</text>
+    </box>
+  )
+}
+
+/**
+ * 紧凑样式（样式 A）：一行一档。
  *
  * 布局预算（侧栏可用 37 列，实测自宿主 width:42 减去两侧 padding）：
  * 标签 4 + gap 1 + 条 14 + gap 1 + 百分比 4 + gap 1 + 倒计时 6 = 31 列。
  *
- * 进度条用带背景色的空格而不是 █ 字符：色块之间没有字形缝隙，观感是连续实心条。
- * 标签的排版靠 flex gap 而不是 padEnd —— 中文字符 length 是 1 但显示占 2 列，
- * padEnd 会按 length 补空格从而排错。
+ * 标签排版靠 flex gap 而不是 padEnd —— 中文字符 length 是 1 但显示占 2 列，
+ * padEnd 会按 length 补空格从而排错。三个紧凑标签都是 2 个中文字符、等宽 4 列。
  *
  * @param props.theme TUI 主题对象（传对象而非 current，以保持主题切换的响应式）
- * @param props.label 中文标签
+ * @param props.label 紧凑标签
  * @param props.win 取窗口数据的 accessor
  * @param props.now 取当前时间戳的 accessor，驱动倒计时重算
  */
-function UsageRow(props: {
+function CompactRow(props: {
   theme: TuiTheme
   label: string
   win: () => UsageWindow
   now: () => number
 }) {
   const tone = () => toneOf(props.win().percent, props.win().status)
-  const filled = () => barFilled(props.win().percent)
   return (
     <box flexDirection="row" gap={1}>
       <text fg={props.theme.current.textMuted}>{props.label}</text>
-      <box flexDirection="row">
-        <text bg={toneColor(props.theme, tone())}>{" ".repeat(filled())}</text>
-        <text bg={trackColor(props.theme)}>{" ".repeat(BAR_WIDTH - filled())}</text>
-      </box>
+      <Bar
+        theme={props.theme}
+        percent={() => props.win().percent}
+        tone={tone}
+        width={BAR_WIDTH}
+      />
       <text fg={toneColor(props.theme, tone())}>
         {formatPercent(props.win().percent, props.win().status)}
       </text>
@@ -98,7 +126,51 @@ function UsageRow(props: {
   )
 }
 
-const tui: TuiPlugin = async (api) => {
+/**
+ * 详细样式（样式 B）：三行一档 —— 标签与百分比一行、进度条一行、完整倒计时一行。
+ *
+ * 条子独占一行所以放得下 20 格；标签用长版本（`5 小时用量`），倒计时用完整
+ * 中文措辞（`重置于 4 天 16 小时`）。百分比靠 flexGrow 弹性间隔推到右边缘。
+ *
+ * @param props.theme TUI 主题对象
+ * @param props.label 长标签
+ * @param props.win 取窗口数据的 accessor
+ * @param props.now 取当前时间戳的 accessor
+ */
+function DetailedRow(props: {
+  theme: TuiTheme
+  label: string
+  win: () => UsageWindow
+  now: () => number
+}) {
+  const tone = () => toneOf(props.win().percent, props.win().status)
+  return (
+    <box flexDirection="column">
+      <box flexDirection="row">
+        <text fg={props.theme.current.textMuted}>{props.label}</text>
+        <box flexGrow={1} />
+        <text fg={toneColor(props.theme, tone())}>
+          {formatPercent(props.win().percent, props.win().status)}
+        </text>
+      </box>
+      <Bar
+        theme={props.theme}
+        percent={() => props.win().percent}
+        tone={tone}
+        width={BAR_WIDTH_DETAILED}
+      />
+      <text fg={props.theme.current.textMuted}>
+        {formatCountdown(props.win().resetsAt, props.now())}
+      </text>
+    </box>
+  )
+}
+
+const tui: TuiPlugin = async (api, options) => {
+  // tui.json 里以 [spec, options] 形式传入的配置，见 parseOptions 的容错说明。
+  // 启动时解析一次；配置不热更新，改完要重启 opencode。
+  const opts = parseOptions(options)
+
   const [usage, setUsage] = createSignal<Usage | null>(null)
   const [stale, setStale] = createSignal(false)
   const [now, setNow] = createSignal(Date.now())
@@ -137,14 +209,14 @@ const tui: TuiPlugin = async (api) => {
   void refresh(true)
 
   api.slots.register({
-    // 内置侧栏小节的 order（从 opencode 1.18.30 二进制的 strings 表解出，
-    // 是与宿主的隐式契约，宿主调整内置 order 时需要同步复核这张表）：
+    // 内置侧栏小节的 order（从 opencode 二进制的 strings 表解出，1.18.30 与
+    // 1.18.31 一致；这是与宿主的隐式契约，宿主调整内置 order 时需要复核这张表）：
     //   internal:sidebar-context = 100, internal:sidebar-mcp = 200,
     //   internal:sidebar-lsp = 300, internal:sidebar-todo = 400,
     //   internal:sidebar-files = 500
-    // 350 落在 lsp(300) 与 todo(400) 之间，满足 spec/README 的
-    // "紧随 Context / MCP / LSP 小节之后"；不用 600，否则会排在 Todo/Files 之上。
-    order: 350,
+    // 默认 350 落在 lsp(300) 与 todo(400) 之间，满足"紧随 Context / MCP / LSP
+    // 之后"；想沉到侧栏最底可在配置里设成 600。
+    order: opts.order,
     slots: {
       sidebar_content: (ctx) => (
         <Show when={usage()}>
@@ -160,14 +232,23 @@ const tui: TuiPlugin = async (api) => {
                 <b>{stale() ? "OpenCode Go !" : "OpenCode Go"}</b>
               </text>
               <For each={ROWS}>
-                {(row) => (
-                  <UsageRow
-                    theme={ctx.theme}
-                    label={row.label}
-                    win={() => data()[row.key]}
-                    now={now}
-                  />
-                )}
+                {(row) =>
+                  opts.style === "detailed" ? (
+                    <DetailedRow
+                      theme={ctx.theme}
+                      label={row.labelLong}
+                      win={() => data()[row.key]}
+                      now={now}
+                    />
+                  ) : (
+                    <CompactRow
+                      theme={ctx.theme}
+                      label={row.label}
+                      win={() => data()[row.key]}
+                      now={now}
+                    />
+                  )
+                }
               </For>
             </box>
           )}
