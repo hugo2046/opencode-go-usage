@@ -180,6 +180,97 @@ export async function fetchUsage(
   return { kind: "ok", usage }
 }
 
+/** 两次上游请求的最小间隔，防止刷新事件密集触发时打爆未公开端点。 */
+const THROTTLE_MS = 20_000
+
+/** {@link createRefresher} 的依赖注入表：时钟与 IO 全部由调用方提供，工厂本身不含 TUI 原语。 */
+export type RefresherDeps = {
+  /** 惰性解析密钥；返回 null 表示暂时没有可用密钥，本次刷新直接跳过。 */
+  resolveKey: () => string | null
+  /** 用密钥换一次快照；baseUrl / 真实 fetch 由调用方在闭包里绑定好。 */
+  fetchUsage: (key: string) => Promise<Snapshot>
+  /** 当前时间戳，用于节流判断；测试可注入假时钟，不必真等。 */
+  now: () => number
+  /** 拿到新快照（`ok`）时回调。 */
+  onUsage: (usage: Usage) => void
+  /** 命中 `dead`（无 Go 套餐 / 密钥无效）时回调，调用方应据此隐藏整节 UI。 */
+  onDead: () => void
+  /** stale 标记变化时回调：`soft-error` 时置 true，拿到新快照时置 false。 */
+  onStale: (stale: boolean) => void
+  /** 节流下限（毫秒），默认 20 秒；测试可覆盖成更小的值以缩短断言路径。 */
+  throttleMs?: number
+}
+
+/** {@link createRefresher} 返回的句柄。 */
+export type Refresher = {
+  /**
+   * 刷新一次额度。
+   *
+   * @param force 跳过节流；启动与兜底定时器用 true，事件触发用 false
+   */
+  refresh: (force: boolean) => Promise<void>
+}
+
+/**
+ * 创建 spec §4 描述的刷新状态机：20 秒节流下限、`force` 绕过节流、
+ * `inflight` 单飞、`dead` 闩锁后不再请求、`soft-error` 保留上次快照。
+ *
+ * 纯逻辑工厂，不引入任何 TUI / JSX / solid 依赖；时钟与网络 IO 均由 `deps` 注入，
+ * 因此可以用假时钟与假 fetchUsage 在单测里驱动，不需要真等 20 秒或打真实网络。
+ * `dead` 与 `inflight` 是工厂内部闭包状态，不对调用方暴露。
+ *
+ * @param deps 依赖注入表，见 {@link RefresherDeps}
+ * @returns 带 `refresh` 方法的句柄
+ */
+export function createRefresher(deps: RefresherDeps): Refresher {
+  const throttleMs = deps.throttleMs ?? THROTTLE_MS
+  // dead 闩锁：命中一次 dead 后永久生效，后续 refresh 直接短路
+  let dead = false
+  // 单飞标志：同一时刻只允许一个请求在飞
+  let inflight = false
+  // 上次实际发起请求（非被节流拦下）的时刻
+  let lastAt = 0
+
+  const runRefresh = async (force: boolean): Promise<void> => {
+    if (dead || inflight) return
+    const at = deps.now()
+    if (!force && at - lastAt < throttleMs) return
+    const key = deps.resolveKey()
+    if (!key) return
+    inflight = true
+    lastAt = at
+    try {
+      const snapshot = await deps.fetchUsage(key)
+      if (snapshot.kind === "dead") {
+        dead = true
+        deps.onDead()
+        return
+      }
+      if (snapshot.kind === "ok") {
+        deps.onUsage(snapshot.usage)
+        deps.onStale(false)
+        return
+      }
+      // soft-error：保留上次快照，只把 stale 标记打开
+      deps.onStale(true)
+    } finally {
+      inflight = false
+    }
+  }
+
+  const refresh = async (force: boolean): Promise<void> => {
+    try {
+      await runRefresh(force)
+    } catch {
+      // 兜底：resolveKey / fetchUsage 理论上不应抛出，但 TUI 宿主状态未就绪等
+      // 意外场景仍可能同步抛错。整体吞掉，避免 TUI 进程出现未处理 rejection
+      // 污染渲染画面；不打印到 stdout/stderr，避免泄露密钥相关信息。
+    }
+  }
+
+  return { refresh }
+}
+
 /** 进度条格数。 */
 export const BAR_WIDTH = 20
 

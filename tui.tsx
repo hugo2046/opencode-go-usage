@@ -6,6 +6,7 @@ import { For, Show, createSignal } from "solid-js"
 import {
   DEFAULT_BASE_URL,
   ROWS,
+  createRefresher,
   defaultStateDir,
   fetchUsage,
   formatBar,
@@ -20,9 +21,6 @@ import {
 
 /** 兜底刷新间隔：覆盖"额度在别处被消耗"的情况。 */
 const FALLBACK_MS = 300_000
-
-/** 两次上游请求的最小间隔，防止 session.idle 密集触发时刷爆端点。 */
-const THROTTLE_MS = 20_000
 
 /** 倒计时文本重算间隔，不发网络请求。 */
 const TICK_MS = 60_000
@@ -78,45 +76,22 @@ const tui: TuiPlugin = async (api) => {
   const [stale, setStale] = createSignal(false)
   const [now, setNow] = createSignal(Date.now())
 
-  /** 永久失效标记：无 Go 套餐或密钥无效后不再请求。 */
-  let dead = false
-  /** 同一时刻只允许一个请求在飞。 */
-  let inflight = false
-  /** 上次发起请求的时刻，用于节流。 */
-  let lastAt = 0
-
-  /**
-   * 刷新一次额度。
-   *
-   * @param force 跳过节流；启动与兜底定时器用 true，事件触发用 false
-   */
-  const refresh = async (force: boolean) => {
-    if (dead || inflight) return
-    const at = Date.now()
-    if (!force && at - lastAt < THROTTLE_MS) return
-    // 惰性解析密钥：会话中途新增密钥也能被拾取；state 未就绪时回退到平台默认目录
-    const key = resolveKey(api.state.path.state || defaultStateDir())
-    if (!key) return
-    inflight = true
-    lastAt = at
-    try {
-      const snapshot = await fetchUsage(key, DEFAULT_BASE_URL)
-      if (snapshot.kind === "dead") {
-        dead = true
-        setUsage(null)
-        return
-      }
-      if (snapshot.kind === "ok") {
-        setUsage(snapshot.usage)
-        setStale(false)
-        return
-      }
-      // soft-error：保留上次快照，只在标题上打一个感叹号
-      setStale(true)
-    } finally {
-      inflight = false
-    }
-  }
+  // 节流 / 单飞 / dead 闩锁这套状态机是纯逻辑，提取到 usage.ts 的 createRefresher
+  // 里做了单测；这里只负责把 solid 的 setter 和真实的 resolveKey / fetchUsage /
+  // Date.now 接进去，行为与提取前完全等价。
+  const { refresh } = createRefresher({
+    // 惰性解析密钥：会话中途新增密钥也能被拾取；state 未就绪或 path 本身缺失时
+    // （类型声明非可选，但运行时不保证）都回退到平台默认目录，而不是同步抛错
+    resolveKey: () => resolveKey(api.state?.path?.state || defaultStateDir()),
+    fetchUsage: (key) => fetchUsage(key, DEFAULT_BASE_URL),
+    now: () => Date.now(),
+    onUsage: (next) => {
+      setUsage(next)
+      setStale(false)
+    },
+    onDead: () => setUsage(null),
+    onStale: (value) => setStale(value),
+  })
 
   const offIdle = api.event.on("session.idle", () => void refresh(false))
   const fallback = setInterval(() => void refresh(true), FALLBACK_MS)

@@ -6,6 +6,7 @@ import {
   AUTH_PROVIDER,
   DEFAULT_BASE_URL,
   ENV_KEY,
+  createRefresher,
   defaultStateDir,
   fetchUsage,
   formatBar,
@@ -13,6 +14,8 @@ import {
   formatPercent,
   resolveKey,
   toneOf,
+  type Snapshot,
+  type Usage,
 } from "../usage.ts"
 
 /**
@@ -184,6 +187,117 @@ describe("fetchUsage", () => {
     }) as unknown as typeof fetch
     const snapshot = await fetchUsage("sk-test", DEFAULT_BASE_URL, impl, 20)
     expect(snapshot.kind).toBe("soft-error")
+  })
+})
+
+describe("createRefresher", () => {
+  /** 复用实测响应体做假快照。 */
+  const SAMPLE_USAGE: Usage = OK_BODY.usage
+
+  test("节流窗口内的非 force 调用被拒（不发起请求）", async () => {
+    // 初始 now 取一个远大于节流窗口的值，让第一次非 force 调用能通过
+    // （lastAt 初始为 0，若 now 也从 0 起会被误判为落在节流窗口内）。
+    let now = 1_000_000
+    let calls = 0
+    const { refresh } = createRefresher({
+      resolveKey: () => "sk-test",
+      fetchUsage: async (): Promise<Snapshot> => {
+        calls++
+        return { kind: "ok", usage: SAMPLE_USAGE }
+      },
+      now: () => now,
+      onUsage: () => {},
+      onDead: () => {},
+      onStale: () => {},
+    })
+    await refresh(false)
+    expect(calls).toBe(1)
+    now += 1_000 // 远小于 20s 节流窗口
+    await refresh(false)
+    expect(calls).toBe(1)
+  })
+
+  test("force: true 穿透节流", async () => {
+    let now = 1_000_000
+    let calls = 0
+    const { refresh } = createRefresher({
+      resolveKey: () => "sk-test",
+      fetchUsage: async (): Promise<Snapshot> => {
+        calls++
+        return { kind: "ok", usage: SAMPLE_USAGE }
+      },
+      now: () => now,
+      onUsage: () => {},
+      onDead: () => {},
+      onStale: () => {},
+    })
+    await refresh(false)
+    now += 1_000
+    await refresh(true)
+    expect(calls).toBe(2)
+  })
+
+  test("并发第二次调用被 inflight 挡住", async () => {
+    let now = 0
+    let calls = 0
+    let resolveFirst: (snapshot: Snapshot) => void = () => {}
+    const { refresh } = createRefresher({
+      resolveKey: () => "sk-test",
+      fetchUsage: (): Promise<Snapshot> => {
+        calls++
+        return new Promise((resolve) => {
+          resolveFirst = resolve
+        })
+      },
+      now: () => now,
+      onUsage: () => {},
+      onDead: () => {},
+      onStale: () => {},
+    })
+    const first = refresh(true)
+    const second = refresh(true) // 第一次尚未 settle，第二次应被 inflight 挡住
+    expect(calls).toBe(1)
+    resolveFirst({ kind: "ok", usage: SAMPLE_USAGE })
+    await Promise.all([first, second])
+    expect(calls).toBe(1)
+  })
+
+  test("dead 之后不再发起任何请求", async () => {
+    let now = 0
+    let calls = 0
+    const { refresh } = createRefresher({
+      resolveKey: () => "sk-test",
+      fetchUsage: async (): Promise<Snapshot> => {
+        calls++
+        return { kind: "dead", message: "no subscription" }
+      },
+      now: () => now,
+      onUsage: () => {},
+      onDead: () => {},
+      onStale: () => {},
+    })
+    await refresh(true)
+    expect(calls).toBe(1)
+    now += 100_000
+    await refresh(true)
+    expect(calls).toBe(1)
+  })
+
+  test("soft-error 时不调用 onUsage（保留上次快照）而是 onStale(true)", async () => {
+    let now = 0
+    const usageCalls: Usage[] = []
+    const staleCalls: boolean[] = []
+    const { refresh } = createRefresher({
+      resolveKey: () => "sk-test",
+      fetchUsage: async (): Promise<Snapshot> => ({ kind: "soft-error", message: "network" }),
+      now: () => now,
+      onUsage: (u) => usageCalls.push(u),
+      onDead: () => {},
+      onStale: (s) => staleCalls.push(s),
+    })
+    await refresh(true)
+    expect(usageCalls).toHaveLength(0)
+    expect(staleCalls).toEqual([true])
   })
 })
 
