@@ -56,9 +56,11 @@ cd "$REPO" && bun install
 按顺序解析，插件不存任何副本：
 
 1. 环境变量 `OPENCODE_GO_API_KEY`
-2. opencode 自己的 `<stateDir>/auth.json` 里的 `opencode-go.key`
+2. opencode 自己的 `auth.json` 里的 `opencode-go.key`
 
-所以 `opencode auth login` 登录过 OpenCode Go 就是零配置。`stateDir` 的推断规则见[配置与行为契约 §2](docs/配置与行为契约_20260916.md#2-密钥解析)。
+所以 `opencode auth login` 登录过 OpenCode Go 就是零配置。
+
+`auth.json` 在 opencode 的 **data** 目录（macOS/Linux 是 `$XDG_DATA_HOME/opencode`，默认 `~/.local/share/opencode`），**不是** `api.state.path.state` 指向的 state 目录（`~/.local/state/opencode`）。插件按候选列表顺序找，data 目录优先。完整规则见[配置与行为契约 §2](docs/配置与行为契约_20260916.md#2-密钥解析)。
 
 ## 刷新
 

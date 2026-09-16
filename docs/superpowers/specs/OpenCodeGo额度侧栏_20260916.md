@@ -51,7 +51,7 @@ opencode 1.18.30 提供未写入官网文档的 TUI 插件 API，类型定义在
 | 备选 slot | `sidebar_footer` 是 `single_winner` 模式，多插件时只有一个会渲染 — **不采用** |
 | 主题 | `ctx.theme.current` 提供 `success` / `warning` / `error` / `textMuted` 等 RGBA |
 | 刷新事件 | `api.event.on("session.idle", ...)`，助手回复结束时触发 |
-| state 目录 | `api.state.path.state` |
+| state 目录 | `api.state.path.state`（**注意**：这是 XDG state 目录，`auth.json` 不在这里，见 §3） |
 | 清理 | `api.lifecycle.onDispose(fn)` |
 
 `opencode.jsonc` 的 `plugin` 数组只加载 server 端插件，TUI 插件放进去无效。
@@ -84,7 +84,11 @@ OpenCode Go
 
 优先级：环境变量 `OPENCODE_GO_API_KEY` → `<stateDir>/auth.json` 的 `opencode-go.key`。
 
-`stateDir` 取 `api.state.path.state`；若为空则回退到平台默认值（`XDG_DATA_HOME`/`~/.local/share` 下的 `opencode`，Windows 为 `LOCALAPPDATA/opencode`），避免 TUI 启动时 state 未就绪导致插件永久静默。
+`auth.json` 在 opencode 的 **data** 目录（`XDG_DATA_HOME`/`~/.local/share` 下的 `opencode`，Windows 为 `LOCALAPPDATA/opencode`），**不是** `api.state.path.state` 指向的 state 目录（`~/.local/state/opencode`，里面是 kv.json / locks / model.json）。这两个是 XDG 规范里不同的位置。
+
+因此 `resolveKey` 接受候选目录列表，按顺序取第一个能读到 `opencode-go.key` 的：先 data 目录，再 `api.state.path.state`（次选，防某些安装两者一致或宿主日后改动）。
+
+> 修正记录：初版写成 `api.state.path.state || defaultStateDir()`，误把两者当同一目录。由于前者永远非空，回退永不触发，密钥永远找不到，整节永不渲染。真机探针（读 `api.state.path` 实际值）才暴露出来。
 
 密钥在每次刷新时惰性解析，因此会话中途新增密钥也能被拾取。插件不复制、不打印、不落盘任何密钥副本。
 
