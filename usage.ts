@@ -69,3 +69,109 @@ export function resolveKey(
     return null
   }
 }
+
+/** 上游 API 基地址。 */
+export const DEFAULT_BASE_URL = "https://opencode.ai"
+
+/** 额度端点路径。 */
+const USAGE_PATH = "/zen/go/v1/usage"
+
+/** 单次请求超时。 */
+const TIMEOUT_MS = 15_000
+
+/**
+ * 一次取数的结果。
+ *
+ * - `ok`：拿到快照
+ * - `soft-error`：可重试（网络、超时、5xx、格式异常），调用方应保留上次快照
+ * - `dead`：永久失效（无 Go 套餐、密钥无效），调用方应停止重试并隐藏 UI
+ */
+export type Snapshot =
+  | { kind: "ok"; usage: Usage }
+  | { kind: "soft-error"; message: string }
+  | { kind: "dead"; message: string }
+
+/**
+ * 运行时校验单个窗口对象。
+ *
+ * @param value 待校验值
+ * @returns 是否为合法窗口
+ */
+function isUsageWindow(value: unknown): value is UsageWindow {
+  if (value === null || typeof value !== "object") return false
+  const w = value as Record<string, unknown>
+  return (
+    typeof w.status === "string" &&
+    typeof w.percent === "number" &&
+    typeof w.resetsAt === "string"
+  )
+}
+
+/**
+ * 运行时校验三档窗口齐全。
+ *
+ * @param value 待校验值
+ * @returns 是否为合法 Usage
+ */
+function isUsage(value: unknown): value is Usage {
+  if (value === null || typeof value !== "object") return false
+  const u = value as Record<string, unknown>
+  return isUsageWindow(u.rolling) && isUsageWindow(u.weekly) && isUsageWindow(u.monthly)
+}
+
+/**
+ * 拉取一次额度快照。
+ *
+ * @param key API Key
+ * @param baseUrl API 基地址
+ * @param fetchImpl fetch 实现，注入以便测试
+ * @returns 三态取数结果
+ */
+export async function fetchUsage(
+  key: string,
+  baseUrl: string = DEFAULT_BASE_URL,
+  fetchImpl: typeof fetch = fetch,
+): Promise<Snapshot> {
+  const controller = new AbortController()
+  const timer = setTimeout(() => controller.abort(), TIMEOUT_MS)
+  let response: Response
+  try {
+    response = await fetchImpl(baseUrl.replace(/\/$/, "") + USAGE_PATH, {
+      method: "GET",
+      headers: { authorization: `Bearer ${key}`, accept: "application/json" },
+      signal: controller.signal,
+    })
+  } catch (error) {
+    return {
+      kind: "soft-error",
+      message: error instanceof Error ? error.message : String(error),
+    }
+  } finally {
+    clearTimeout(timer)
+  }
+
+  let body: unknown = null
+  try {
+    body = await response.json()
+  } catch {
+    body = null
+  }
+
+  // 先看业务错误：无 Go 套餐返回 EntitlementError，且可能伴随 4xx，
+  // 所以必须排在状态码判断之前，否则会丢掉上游给的具体原因。
+  const bodyError = (body as { error?: { type?: string; message?: string } } | null)?.error
+  if (bodyError?.type === "EntitlementError") {
+    return { kind: "dead", message: bodyError.message ?? "OpenCode Go subscription required." }
+  }
+  if (response.status === 401 || response.status === 403) {
+    return { kind: "dead", message: `HTTP ${response.status}：密钥无效或无权访问` }
+  }
+  if (!response.ok) {
+    return { kind: "soft-error", message: `HTTP ${response.status}` }
+  }
+  const usage = (body as { usage?: unknown } | null)?.usage
+  if (!isUsage(usage)) {
+    return { kind: "soft-error", message: "响应缺少 usage 字段" }
+  }
+  return { kind: "ok", usage }
+}
