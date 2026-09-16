@@ -9,7 +9,7 @@
     "./tui": "./tui.tsx"
   },
   "engines": {
-    "opencode": ">=1.18.0"
+    "opencode": ">=1.18.30"
   },
   "scripts": {
     "test": "bun test"
