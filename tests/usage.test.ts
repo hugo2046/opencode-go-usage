@@ -59,6 +59,45 @@ describe("resolveKey", () => {
     const dir = makeStateDir(JSON.stringify({ [AUTH_PROVIDER]: { key: "   " } }))
     expect(resolveKey(dir, { [ENV_KEY]: "  " })).toBeNull()
   })
+
+  // 多候选目录：opencode 的 api.state.path.state 指向 XDG_STATE_HOME 下的
+  // 运行时状态目录（kv.json / locks / model.json），而 auth.json 存在
+  // XDG_DATA_HOME 下的数据目录。两者是不同目录，所以必须逐个候选去找。
+  test("多个候选目录：第一个没有 auth.json 时继续找第二个", () => {
+    const empty = makeStateDir()
+    const withKey = makeStateDir(JSON.stringify({ [AUTH_PROVIDER]: { key: "sk-second" } }))
+    expect(resolveKey([empty, withKey], {})).toBe("sk-second")
+  })
+
+  test("多个候选目录：第一个 auth.json 缺 opencode-go 时继续找第二个", () => {
+    const other = makeStateDir(JSON.stringify({ anthropic: { key: "sk-other" } }))
+    const withKey = makeStateDir(JSON.stringify({ [AUTH_PROVIDER]: { key: "sk-second" } }))
+    expect(resolveKey([other, withKey], {})).toBe("sk-second")
+  })
+
+  test("多个候选目录：命中第一个就不再往后找", () => {
+    const first = makeStateDir(JSON.stringify({ [AUTH_PROVIDER]: { key: "sk-first" } }))
+    const second = makeStateDir(JSON.stringify({ [AUTH_PROVIDER]: { key: "sk-second" } }))
+    expect(resolveKey([first, second], {})).toBe("sk-first")
+  })
+
+  test("多个候选目录：全都没有时返回 null", () => {
+    expect(resolveKey([makeStateDir(), makeStateDir()], {})).toBeNull()
+  })
+
+  test("多个候选目录：环境变量仍然优先于所有目录", () => {
+    const withKey = makeStateDir(JSON.stringify({ [AUTH_PROVIDER]: { key: "from-file" } }))
+    expect(resolveKey([withKey], { [ENV_KEY]: "from-env" })).toBe("from-env")
+  })
+
+  test("多个候选目录：空字符串候选被跳过", () => {
+    const withKey = makeStateDir(JSON.stringify({ [AUTH_PROVIDER]: { key: "sk-ok" } }))
+    expect(resolveKey(["", withKey], {})).toBe("sk-ok")
+  })
+
+  test("空候选列表返回 null 而不抛错", () => {
+    expect(resolveKey([], {})).toBeNull()
+  })
 })
 
 describe("defaultStateDir", () => {

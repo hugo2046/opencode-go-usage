@@ -80,9 +80,15 @@ const tui: TuiPlugin = async (api) => {
   // 里做了单测；这里只负责把 solid 的 setter 和真实的 resolveKey / fetchUsage /
   // Date.now 接进去，行为与提取前完全等价。
   const { refresh } = createRefresher({
-    // 惰性解析密钥：会话中途新增密钥也能被拾取；state 未就绪或 path 本身缺失时
-    // （类型声明非可选，但运行时不保证）都回退到平台默认目录，而不是同步抛错
-    resolveKey: () => resolveKey(api.state?.path?.state || defaultStateDir()),
+    // 惰性解析密钥：会话中途新增密钥也能被拾取。
+    //
+    // 两个候选目录，data 目录优先：auth.json 存在 opencode 的 **data** 目录
+    // （XDG_DATA_HOME，即 defaultStateDir() 算出的 ~/.local/share/opencode），
+    // 而 api.state.path.state 指向的是 **state** 目录（XDG_STATE_HOME，
+    // ~/.local/state/opencode，里面是 kv.json / locks / model.json）。
+    // 这是 XDG 规范里两个不同的目录，早期版本误当同一个，导致密钥永远找不到、
+    // 整节永不渲染。state 目录留作次选，以防某些安装两者一致或宿主日后改动。
+    resolveKey: () => resolveKey([defaultStateDir(), api.state?.path?.state ?? ""]),
     fetchUsage: (key) => fetchUsage(key, DEFAULT_BASE_URL),
     now: () => Date.now(),
     onUsage: (next) => {

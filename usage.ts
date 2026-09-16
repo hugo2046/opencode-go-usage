@@ -54,20 +54,27 @@ export function defaultStateDir(
  * @returns key 字符串；找不到、为空白或文件损坏时返回 null
  */
 export function resolveKey(
-  stateDir: string,
+  stateDir: string | readonly string[],
   env: Record<string, string | undefined> = process.env,
 ): string | null {
   const fromEnv = env[ENV_KEY]?.trim()
   if (fromEnv) return fromEnv
-  try {
-    const raw = readFileSync(join(stateDir, "auth.json"), "utf8")
-    const parsed = JSON.parse(raw) as Record<string, { key?: string } | undefined>
-    const key = parsed[AUTH_PROVIDER]?.key?.trim()
-    return key ? key : null
-  } catch {
-    // 文件缺失、无权限、JSON 损坏一律视为"没有密钥"，由调用方静默隐藏 UI
-    return null
+  // 多候选：opencode 的 api.state.path.state 指向 XDG_STATE_HOME 下的运行时
+  // 状态目录（kv.json / locks / model.json），而 auth.json 存在 XDG_DATA_HOME
+  // 下的数据目录。两者是 XDG 规范里不同的目录，所以要逐个候选去找。
+  const dirs = typeof stateDir === "string" ? [stateDir] : stateDir
+  for (const dir of dirs) {
+    if (!dir) continue
+    try {
+      const raw = readFileSync(join(dir, "auth.json"), "utf8")
+      const parsed = JSON.parse(raw) as Record<string, { key?: string } | undefined>
+      const key = parsed[AUTH_PROVIDER]?.key?.trim()
+      if (key) return key
+    } catch {
+      // 该候选目录的 auth.json 缺失、无权限或 JSON 损坏，试下一个候选
+    }
   }
+  return null
 }
 
 /** 上游 API 基地址。 */
