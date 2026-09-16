@@ -129,7 +129,14 @@ const tui: TuiPlugin = async (api) => {
   void refresh(true)
 
   api.slots.register({
-    order: 100,
+    // 内置侧栏小节的 order（从 opencode 1.18.30 二进制的 strings 表解出，
+    // 是与宿主的隐式契约，宿主调整内置 order 时需要同步复核这张表）：
+    //   internal:sidebar-context = 100, internal:sidebar-mcp = 200,
+    //   internal:sidebar-lsp = 300, internal:sidebar-todo = 400,
+    //   internal:sidebar-files = 500
+    // 350 落在 lsp(300) 与 todo(400) 之间，满足 spec/README 的
+    // "紧随 Context / MCP / LSP 小节之后"；不用 600，否则会排在 Todo/Files 之上。
+    order: 350,
     slots: {
       sidebar_content: (ctx) => (
         <Show when={usage()}>

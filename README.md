@@ -19,6 +19,20 @@ OpenCode Go
 
 渲染在 `sidebar_content` slot，紧随 opencode 自带的 `Context` / `MCP` / `LSP` 小节之后。
 
+### 侧栏排序（order）
+
+`sidebar_content` 是叠加模式，各插件按 `order` 升序排列。从 opencode 1.18.30 二进制解出的内置 order 表：
+
+| 插件 id | order |
+|---|---|
+| `internal:sidebar-context` | 100 |
+| `internal:sidebar-mcp` | 200 |
+| `internal:sidebar-lsp` | 300 |
+| `internal:sidebar-todo` | 400 |
+| `internal:sidebar-files` | 500 |
+
+本插件用 `order: 350`，落在 `LSP`(300) 与 `Todo`(400) 之间，即"紧随 Context / MCP / LSP 小节之后"。这是与宿主的隐式契约，宿主升级调整内置 order 时需要同步复核。
+
 ## 安装
 
 需要 opencode >= 1.18.0。
