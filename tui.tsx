@@ -122,9 +122,15 @@ const tui: TuiPlugin = async (api) => {
       sidebar_content: (ctx) => (
         <Show when={usage()}>
           {(data) => (
-            <box flexDirection="column" paddingTop={1}>
-              <text fg={ctx.theme.current.textMuted}>
-                {stale() ? "OpenCode Go !" : "OpenCode Go"}
+            <box flexDirection="column">
+              {/* 与宿主的 Context / MCP / LSP 小节标题保持一致：
+                  fg 用 theme.text（不是 textMuted，那是内容行的颜色），
+                  文本包一层 <b> 取粗体。外层 box 不加 paddingTop —— 节之间
+                  的间距由宿主的 slot 容器 gap 提供，自己再加会变成双倍空行。
+                  依据：opencode 二进制里 internal:sidebar-lsp 的实现为
+                  <text fg={theme.current.text}><b>LSP</b></text>。 */}
+              <text fg={ctx.theme.current.text}>
+                <b>{stale() ? "OpenCode Go !" : "OpenCode Go"}</b>
               </text>
               <For each={ROWS}>
                 {(row) => (

@@ -2,6 +2,10 @@
 
 opencode TUI 插件：在侧栏展示 OpenCode Go 套餐的 5 小时 / 每周 / 每月额度。
 
+<img src="images/sidebar-go-usage.png" alt="opencode 侧栏底部的 OpenCode Go 额度小节，位于 Context / MCP / LSP 之下，三档额度各含标签、百分比、进度条与重置倒计时" width="340">
+
+## 显示内容
+
 ```
 OpenCode Go
 5 小时用量             8%
@@ -15,7 +19,7 @@ OpenCode Go
 重置于 27 天 23 小时
 ```
 
-渲染在 `sidebar_content` slot，紧随 opencode 自带的 `Context` / `MCP` / `LSP` 小节之后。
+渲染在 `sidebar_content` slot，紧随 opencode 自带的 `Context` / `MCP` / `LSP` 小节之后；节标题的颜色与粗体跟宿主的 `Context` / `MCP` / `LSP` 保持一致。
 
 ## 文档
 
