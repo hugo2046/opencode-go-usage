@@ -8,7 +8,11 @@ import {
   ENV_KEY,
   defaultStateDir,
   fetchUsage,
+  formatBar,
+  formatCountdown,
+  formatPercent,
   resolveKey,
+  toneOf,
 } from "../usage.ts"
 
 /**
@@ -162,5 +166,93 @@ describe("fetchUsage", () => {
       },
     })
     expect((await fetchUsage("sk-test", DEFAULT_BASE_URL, impl)).kind).toBe("soft-error")
+  })
+})
+
+describe("formatBar", () => {
+  test("0% 全空", () => {
+    expect(formatBar(0, 20)).toBe("░".repeat(20))
+  })
+
+  test("100% 全满", () => {
+    expect(formatBar(100, 20)).toBe("█".repeat(20))
+  })
+
+  test("8% 四舍五入到 2 格", () => {
+    expect(formatBar(8, 20)).toBe("██" + "░".repeat(18))
+  })
+
+  test("53% 四舍五入到 11 格", () => {
+    expect(formatBar(53, 20)).toBe("█".repeat(11) + "░".repeat(9))
+  })
+
+  test("26% 四舍五入到 5 格", () => {
+    expect(formatBar(26, 20)).toBe("█".repeat(5) + "░".repeat(15))
+  })
+
+  test("越界与非法输入被夹住且总宽不变", () => {
+    for (const p of [-50, 0, 1, 33, 99, 100, 250, Number.NaN]) {
+      expect([...formatBar(p, 20)]).toHaveLength(20)
+    }
+  })
+})
+
+describe("toneOf", () => {
+  test("69% 仍为正常", () => {
+    expect(toneOf(69, "ok")).toBe("ok")
+  })
+
+  test("70% 起为警告", () => {
+    expect(toneOf(70, "ok")).toBe("warn")
+  })
+
+  test("89% 仍为警告", () => {
+    expect(toneOf(89, "ok")).toBe("warn")
+  })
+
+  test("90% 起为危险", () => {
+    expect(toneOf(90, "ok")).toBe("danger")
+  })
+
+  test("rate-limited 无论百分比都是危险", () => {
+    expect(toneOf(3, "rate-limited")).toBe("danger")
+  })
+})
+
+describe("formatPercent", () => {
+  test("右对齐到 4 字符", () => {
+    expect(formatPercent(8, "ok")).toBe("  8%")
+    expect(formatPercent(53, "ok")).toBe(" 53%")
+    expect(formatPercent(100, "ok")).toBe("100%")
+  })
+
+  test("打满时显示已达上限", () => {
+    expect(formatPercent(100, "rate-limited")).toBe("已达上限")
+  })
+})
+
+describe("formatCountdown", () => {
+  /** 实测快照对应的参考时刻。 */
+  const now = Date.parse("2026-09-16T07:51:00.000Z")
+
+  test("不足一小时只显示分钟", () => {
+    expect(formatCountdown("2026-09-16T08:22:31.724Z", now)).toBe("重置于 31 分钟")
+  })
+
+  test("不足一天显示小时与分钟", () => {
+    expect(formatCountdown("2026-09-16T12:05:00.000Z", now)).toBe("重置于 4 小时 14 分钟")
+  })
+
+  test("超过一天显示天与小时", () => {
+    expect(formatCountdown("2026-09-21T00:00:00.724Z", now)).toBe("重置于 4 天 16 小时")
+    expect(formatCountdown("2026-10-14T07:37:52.724Z", now)).toBe("重置于 27 天 23 小时")
+  })
+
+  test("已过期显示即将重置", () => {
+    expect(formatCountdown("2026-09-16T07:00:00.000Z", now)).toBe("即将重置")
+  })
+
+  test("非法时间串不抛错", () => {
+    expect(formatCountdown("not-a-date", now)).toBe("重置时间未知")
   })
 })

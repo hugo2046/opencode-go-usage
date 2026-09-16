@@ -175,3 +175,77 @@ export async function fetchUsage(
   }
   return { kind: "ok", usage }
 }
+
+/** 进度条格数。 */
+export const BAR_WIDTH = 20
+
+/** 侧栏三行的渲染顺序与中文标签。 */
+export const ROWS = [
+  { key: "rolling", label: "5 小时用量" },
+  { key: "weekly", label: "每周用量" },
+  { key: "monthly", label: "每月用量" },
+] as const
+
+/** 进度条色调，由 tui.tsx 映射到主题色。 */
+export type Tone = "ok" | "warn" | "danger"
+
+/**
+ * 渲染定宽进度条。
+ *
+ * @param percent 已用百分比，越界或非法值会被夹到 0-100
+ * @param width 格数
+ * @returns 由 █ 与 ░ 组成的定长字符串
+ */
+export function formatBar(percent: number, width: number = BAR_WIDTH): string {
+  const safe = Number.isFinite(percent) ? percent : 0
+  const clamped = Math.min(100, Math.max(0, safe))
+  const filled = Math.round((clamped / 100) * width)
+  return "█".repeat(filled) + "░".repeat(width - filled)
+}
+
+/**
+ * 判定进度条色调。
+ *
+ * @param percent 已用百分比
+ * @param status 上游 status 字段
+ * @returns 色调名
+ */
+export function toneOf(percent: number, status: string): Tone {
+  if (status === "rate-limited" || percent >= 90) return "danger"
+  if (percent >= 70) return "warn"
+  return "ok"
+}
+
+/**
+ * 格式化行右侧的百分比文本。
+ *
+ * @param percent 已用百分比
+ * @param status 上游 status 字段
+ * @returns 打满时为 "已达上限"，否则是右对齐到 4 字符的百分比
+ */
+export function formatPercent(percent: number, status: string): string {
+  if (status === "rate-limited") return "已达上限"
+  return `${Math.round(percent)}%`.padStart(4, " ")
+}
+
+/**
+ * 格式化重置倒计时整行文本。
+ *
+ * @param resetsAt ISO 8601 时间串
+ * @param now 当前时间戳
+ * @returns 形如 "重置于 4 天 16 小时" 的文本
+ */
+export function formatCountdown(resetsAt: string, now: number = Date.now()): string {
+  const target = new Date(resetsAt).getTime()
+  if (!Number.isFinite(target)) return "重置时间未知"
+  const ms = target - now
+  if (ms <= 0) return "即将重置"
+  // 统一折算到分钟再拆分，避免秒级抖动导致文本反复变化
+  const totalMinutes = Math.floor(ms / 60_000)
+  const days = Math.floor(totalMinutes / 1440)
+  const hours = Math.floor((totalMinutes % 1440) / 60)
+  const minutes = totalMinutes % 60
+  if (days > 0) return `重置于 ${days} 天 ${hours} 小时`
+  if (hours > 0) return `重置于 ${hours} 小时 ${minutes} 分钟`
+  return `重置于 ${minutes} 分钟`
+}
