@@ -125,22 +125,33 @@ function isUsage(value: unknown): value is Usage {
  * @param key API Key
  * @param baseUrl API 基地址
  * @param fetchImpl fetch 实现，注入以便测试
+ * @param timeoutMs 超时时长（毫秒），覆盖从请求发起到 body 读取完成的整个过程；默认 15 秒
  * @returns 三态取数结果
  */
 export async function fetchUsage(
   key: string,
   baseUrl: string = DEFAULT_BASE_URL,
   fetchImpl: typeof fetch = fetch,
+  timeoutMs: number = TIMEOUT_MS,
 ): Promise<Snapshot> {
   const controller = new AbortController()
-  const timer = setTimeout(() => controller.abort(), TIMEOUT_MS)
+  const timer = setTimeout(() => controller.abort(), timeoutMs)
   let response: Response
+  let body: unknown = null
   try {
     response = await fetchImpl(baseUrl.replace(/\/$/, "") + USAGE_PATH, {
       method: "GET",
       headers: { authorization: `Bearer ${key}`, accept: "application/json" },
       signal: controller.signal,
     })
+    try {
+      // body 读取必须仍在同一个 AbortController 的保护范围内：
+      // 服务端可能只发响应头就不发完 body，若此时超时定时器已被清除，
+      // response.json() 会永久悬挂，进而拖死上层的 inflight 状态机。
+      body = await response.json()
+    } catch {
+      body = null
+    }
   } catch (error) {
     return {
       kind: "soft-error",
@@ -148,13 +159,6 @@ export async function fetchUsage(
     }
   } finally {
     clearTimeout(timer)
-  }
-
-  let body: unknown = null
-  try {
-    body = await response.json()
-  } catch {
-    body = null
   }
 
   // 先看业务错误：无 Go 套餐返回 EntitlementError，且可能伴随 4xx，

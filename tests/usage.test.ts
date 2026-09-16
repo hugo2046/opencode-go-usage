@@ -167,6 +167,24 @@ describe("fetchUsage", () => {
     })
     expect((await fetchUsage("sk-test", DEFAULT_BASE_URL, impl)).kind).toBe("soft-error")
   })
+
+  test("响应头已到但 body 永不 resolve 时，超时后判为 soft-error 而非悬挂", async () => {
+    // 模拟服务端只发了响应头就不发完 body：json() 永不 settle，
+    // 除非 AbortController 触发。用一个很短的注入超时让测试跑得快。
+    const impl = (async (_url: string, init?: RequestInit) => {
+      const signal = init?.signal as AbortSignal | undefined
+      return {
+        ok: true,
+        status: 200,
+        json: () =>
+          new Promise((_resolve, reject) => {
+            signal?.addEventListener("abort", () => reject(new Error("aborted")))
+          }),
+      } as unknown as Response
+    }) as unknown as typeof fetch
+    const snapshot = await fetchUsage("sk-test", DEFAULT_BASE_URL, impl, 20)
+    expect(snapshot.kind).toBe("soft-error")
+  })
 })
 
 describe("formatBar", () => {
