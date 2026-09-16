@@ -1,17 +1,20 @@
 /** @jsxImportSource @opentui/solid */
-/** opencode TUI 插件：在侧栏纵向展示 OpenCode Go 的 5 小时 / 每周 / 每月额度。 */
+/** opencode TUI 插件：在侧栏一行一档展示 OpenCode Go 的滚动 / 本周 / 本月额度。 */
 
 import type { TuiPlugin, TuiPluginModule, TuiTheme } from "@opencode-ai/plugin/tui"
 import { For, Show, createSignal } from "solid-js"
 import {
+  BAR_WIDTH,
+  COUNTDOWN_WIDTH,
   DEFAULT_BASE_URL,
   ROWS,
+  barFilled,
   createRefresher,
   defaultStateDir,
   fetchUsage,
-  formatBar,
-  formatCountdown,
+  formatCountdownShort,
   formatPercent,
+  hasEnoughContrast,
   resolveKey,
   toneOf,
   type Tone,
@@ -39,7 +42,31 @@ function toneColor(theme: TuiTheme, tone: Tone) {
 }
 
 /**
- * 单个额度窗口的三行展示：标签与百分比、进度条、重置倒计时。
+ * 进度条轨道（未用部分）的颜色。
+ *
+ * 优先用主题的 `border`：它的语义就是「在背景上可见的边框色」，任何主题都得
+ * 保证这一点，所以深色浅色都能跟随，不需要按 theme.mode() 分叉。但个别主题
+ * 可能把它设得和背景几乎一样，所以再做一次运行时亮度差检查，不合格就回退到
+ * textMuted。不能用 borderSubtle / backgroundElement —— 它们的语义是「几乎
+ * 不可见的分隔」，ayu 下与 background 的亮度差只有 0.03 / 0.01，做轨道等于没画。
+ *
+ * @param theme TUI 主题对象
+ * @returns 轨道色
+ */
+function trackColor(theme: TuiTheme) {
+  const c = theme.current
+  return hasEnoughContrast(c.border, c.background) ? c.border : c.textMuted
+}
+
+/**
+ * 单个额度窗口的一行展示：标签、实心进度条、百分比、紧凑倒计时。
+ *
+ * 布局预算（侧栏可用 37 列，实测自宿主 width:42 减去两侧 padding）：
+ * 标签 4 + gap 1 + 条 14 + gap 1 + 百分比 4 + gap 1 + 倒计时 6 = 31 列。
+ *
+ * 进度条用带背景色的空格而不是 █ 字符：色块之间没有字形缝隙，观感是连续实心条。
+ * 标签的排版靠 flex gap 而不是 padEnd —— 中文字符 length 是 1 但显示占 2 列，
+ * padEnd 会按 length 补空格从而排错。
  *
  * @param props.theme TUI 主题对象（传对象而非 current，以保持主题切换的响应式）
  * @param props.label 中文标签
@@ -52,20 +79,20 @@ function UsageRow(props: {
   win: () => UsageWindow
   now: () => number
 }) {
+  const tone = () => toneOf(props.win().percent, props.win().status)
+  const filled = () => barFilled(props.win().percent)
   return (
-    <box flexDirection="column">
+    <box flexDirection="row" gap={1}>
+      <text fg={props.theme.current.textMuted}>{props.label}</text>
       <box flexDirection="row">
-        <text fg={props.theme.current.textMuted}>{props.label}</text>
-        <box flexGrow={1} />
-        <text fg={props.theme.current.textMuted}>
-          {formatPercent(props.win().percent, props.win().status)}
-        </text>
+        <text bg={toneColor(props.theme, tone())}>{" ".repeat(filled())}</text>
+        <text bg={trackColor(props.theme)}>{" ".repeat(BAR_WIDTH - filled())}</text>
       </box>
-      <text fg={toneColor(props.theme, toneOf(props.win().percent, props.win().status))}>
-        {formatBar(props.win().percent)}
+      <text fg={toneColor(props.theme, tone())}>
+        {formatPercent(props.win().percent, props.win().status)}
       </text>
       <text fg={props.theme.current.textMuted}>
-        {formatCountdown(props.win().resetsAt, props.now())}
+        {formatCountdownShort(props.win().resetsAt, props.now()).padStart(COUNTDOWN_WIDTH)}
       </text>
     </box>
   )

@@ -279,13 +279,13 @@ export function createRefresher(deps: RefresherDeps): Refresher {
 }
 
 /** 进度条格数。 */
-export const BAR_WIDTH = 20
+export const BAR_WIDTH = 14
 
 /** 侧栏三行的渲染顺序与中文标签。 */
 export const ROWS = [
-  { key: "rolling", label: "5 小时用量" },
-  { key: "weekly", label: "每周用量" },
-  { key: "monthly", label: "每月用量" },
+  { key: "rolling", label: "滚动" },
+  { key: "weekly", label: "本周" },
+  { key: "monthly", label: "本月" },
 ] as const
 
 /** 进度条色调，由 tui.tsx 映射到主题色。 */
@@ -298,10 +298,32 @@ export type Tone = "ok" | "warn" | "danger"
  * @param width 格数
  * @returns 由 █ 与 ░ 组成的定长字符串
  */
-export function formatBar(percent: number, width: number = BAR_WIDTH): string {
+/**
+ * 进度条里「已用」的格数，色块版与字符版共用这一处计算。
+ *
+ * @param percent 已用百分比，越界或非法值会被夹到 0-100
+ * @param width 总格数
+ * @returns 0 到 width 之间的整数
+ */
+export function barFilled(percent: number, width: number = BAR_WIDTH): number {
   const safe = Number.isFinite(percent) ? percent : 0
   const clamped = Math.min(100, Math.max(0, safe))
-  const filled = Math.round((clamped / 100) * width)
+  return Math.round((clamped / 100) * width)
+}
+
+/**
+ * 渲染定宽进度条的字符版本。
+ *
+ * TUI 渲染走的是带背景色的实心色块（见 tui.tsx 的 UsageRow），不用这个；
+ * 它留给脱离终端的场景——排障文档里那条数据层诊断命令就靠它在普通 stdout
+ * 上打出条子。格数与色块版共用 {@link barFilled}，两者不会算出不同结果。
+ *
+ * @param percent 已用百分比，越界或非法值会被夹到 0-100
+ * @param width 格数
+ * @returns 由 █ 与 ░ 组成的定长字符串
+ */
+export function formatBar(percent: number, width: number = BAR_WIDTH): string {
+  const filled = barFilled(percent, width)
   return "█".repeat(filled) + "░".repeat(width - filled)
 }
 
@@ -326,7 +348,9 @@ export function toneOf(percent: number, status: string): Tone {
  * @returns 打满时为 "已达上限"，否则是右对齐到 4 字符的百分比
  */
 export function formatPercent(percent: number, status: string): string {
-  if (status === "rate-limited") return "已达上限"
+  // 紧凑布局的百分比列只有 4 显示列，中文「已达上限」占 8 列会撑破排版，
+  // 所以打满时用 3 字母的 MAX，右对齐后同样是 4 列。
+  if (status === "rate-limited") return " MAX"
   return `${Math.round(percent)}%`.padStart(4, " ")
 }
 
@@ -350,4 +374,87 @@ export function formatCountdown(resetsAt: string, now: number = Date.now()): str
   if (days > 0) return `重置于 ${days} 天 ${hours} 小时`
   if (hours > 0) return `重置于 ${hours} 小时 ${minutes} 分钟`
   return `重置于 ${minutes} 分钟`
+}
+
+/** 标签列的显示宽度（中文按 2 列算，"滚动"/"本周"/"本月" 各 4 列，右侧留 2 列间距）。 */
+export const LABEL_WIDTH = 6
+
+/** 倒计时列的显示宽度，formatCountdownShort 保证不超过它。 */
+export const COUNTDOWN_WIDTH = 6
+
+/**
+ * 紧凑倒计时，给一行式布局用（formatCountdown 的长文本版留给需要完整措辞的地方）。
+ *
+ * 输出宽度恒 ≤ COUNTDOWN_WIDTH 列，这是侧栏布局预算的前提：
+ * 天数达到三位时省略小时（`106d`），否则最长是 `99d23h` / `23h59m`。
+ *
+ * @param resetsAt ISO 8601 时间串
+ * @param now 当前时间戳
+ * @returns 形如 `27d23h` / `4h14m` / `31m` 的短文本；已过期或无法解析给 `--`
+ */
+export function formatCountdownShort(resetsAt: string, now: number = Date.now()): string {
+  const target = new Date(resetsAt).getTime()
+  if (!Number.isFinite(target)) return "--"
+  const ms = target - now
+  if (ms <= 0) return "--"
+  // 与 formatCountdown 一致：先折算到分钟再拆分，避免秒级抖动
+  const totalMinutes = Math.floor(ms / 60_000)
+  const days = Math.floor(totalMinutes / 1440)
+  const hours = Math.floor((totalMinutes % 1440) / 60)
+  const minutes = totalMinutes % 60
+  if (days >= 100) return `${days}d`
+  if (days > 0) return `${days}d${hours}h`
+  if (hours > 0) return `${hours}h${minutes}m`
+  return `${minutes}m`
+}
+
+/** 颜色的 RGB 分量。分量可以是 0-1（opentui 的 RGBA 用这个刻度）或 0-255。 */
+export type RgbLike = { r: number; g: number; b: number }
+
+/**
+ * 相对亮度，0（黑）到 1（白），用 Rec.709 权重。
+ *
+ * 分量刻度用启发式判断：≤1 视为 0-1 刻度并乘 255，否则视为 0-255。
+ * 代价是 0-255 刻度下的极暗色（如 rgb(1,1,1)）会被当成 0-1 刻度的白，
+ * 但 opentui 的 RGBA 统一是 0-1，实测 ayu 的 border 按此还原为 #6c7380 正确。
+ *
+ * @param color 颜色；null/undefined 或分量非有限值时返回 NaN
+ * @returns 0-1 的亮度，无法计算时为 NaN
+ */
+export function relativeLuma(color: RgbLike | undefined | null): number {
+  if (!color) return Number.NaN
+  const to255 = (v: unknown) => {
+    const n = typeof v === "number" ? v : Number.NaN
+    if (!Number.isFinite(n)) return Number.NaN
+    return n <= 1 ? n * 255 : n
+  }
+  const r = to255(color.r)
+  const g = to255(color.g)
+  const b = to255(color.b)
+  if (!Number.isFinite(r) || !Number.isFinite(g) || !Number.isFinite(b)) return Number.NaN
+  return (0.2126 * r + 0.7152 * g + 0.0722 * b) / 255
+}
+
+/**
+ * 两个颜色的亮度差是否够大。
+ *
+ * 用来在运行时挑进度条轨道色：主题的 `border` 语义上应当在背景上可见，
+ * 但个别主题可能把它设得和背景几乎一样（ayu 的 `borderSubtle` 与
+ * `background` 只差 0.03，拿来做轨道会完全看不见）。这个判断让渲染层
+ * 能在真实颜色不合格时回退，而不是靠猜主题是深色还是浅色。
+ *
+ * @param a 颜色 A
+ * @param b 颜色 B
+ * @param minDelta 亮度差下限
+ * @returns 任一颜色无法计算亮度时为 false
+ */
+export function hasEnoughContrast(
+  a: RgbLike | undefined | null,
+  b: RgbLike | undefined | null,
+  minDelta: number = 0.12,
+): boolean {
+  const la = relativeLuma(a)
+  const lb = relativeLuma(b)
+  if (!Number.isFinite(la) || !Number.isFinite(lb)) return false
+  return Math.abs(la - lb) >= minDelta
 }

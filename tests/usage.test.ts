@@ -9,9 +9,13 @@ import {
   createRefresher,
   defaultStateDir,
   fetchUsage,
+  barFilled,
   formatBar,
   formatCountdown,
+  formatCountdownShort,
   formatPercent,
+  hasEnoughContrast,
+  relativeLuma,
   resolveKey,
   toneOf,
   type Snapshot,
@@ -397,8 +401,15 @@ describe("formatPercent", () => {
     expect(formatPercent(100, "ok")).toBe("100%")
   })
 
-  test("打满时显示已达上限", () => {
-    expect(formatPercent(100, "rate-limited")).toBe("已达上限")
+  test("打满时显示 MAX，并且同样是 4 列（紧凑布局的列宽预算）", () => {
+    expect(formatPercent(100, "rate-limited")).toBe(" MAX")
+    expect(formatPercent(100, "rate-limited").length).toBe(4)
+  })
+
+  test("所有正常百分比都恰好 4 列", () => {
+    for (const p of [0, 1, 8, 55, 99, 100]) {
+      expect(formatPercent(p, "ok").length).toBe(4)
+    }
   })
 })
 
@@ -425,5 +436,112 @@ describe("formatCountdown", () => {
 
   test("非法时间串不抛错", () => {
     expect(formatCountdown("not-a-date", now)).toBe("重置时间未知")
+  })
+})
+
+// ── 紧凑布局（方向 B）新增的纯函数 ──────────────────────────────
+
+describe("formatCountdownShort", () => {
+  /** 与 formatCountdown 用同一个参考时刻，便于对照 */
+  const now = Date.parse("2026-09-16T07:51:00.000Z")
+
+  test("不足一小时只给分钟", () => {
+    expect(formatCountdownShort("2026-09-16T08:22:31.724Z", now)).toBe("31m")
+  })
+
+  test("不足一天给小时+分钟", () => {
+    expect(formatCountdownShort("2026-09-16T12:05:00.000Z", now)).toBe("4h14m")
+  })
+
+  test("超过一天给天+小时", () => {
+    expect(formatCountdownShort("2026-09-21T00:00:00.724Z", now)).toBe("4d16h")
+    expect(formatCountdownShort("2026-10-14T07:37:52.724Z", now)).toBe("27d23h")
+  })
+
+  test("已过期与非法时间串都给占位符", () => {
+    expect(formatCountdownShort("2026-09-16T07:00:00.000Z", now)).toBe("--")
+    expect(formatCountdownShort("not-a-date", now)).toBe("--")
+  })
+
+  test("输出永不超过 6 列（侧栏布局预算依赖这一点）", () => {
+    const cases = [
+      "2026-09-16T07:52:00.000Z", // 1m
+      "2026-09-16T08:50:00.000Z", // 59m
+      "2026-09-16T08:51:00.000Z", // 1h0m
+      "2026-09-17T07:50:00.000Z", // 23h59m
+      "2026-09-17T07:52:00.000Z", // 1d0h
+      "2026-12-31T23:59:00.000Z", // 106d16h
+    ]
+    for (const c of cases) {
+      expect(formatCountdownShort(c, now).length).toBeLessThanOrEqual(6)
+    }
+  })
+})
+
+describe("relativeLuma", () => {
+  test("黑白两端", () => {
+    expect(relativeLuma({ r: 0, g: 0, b: 0 })).toBeCloseTo(0, 5)
+    expect(relativeLuma({ r: 255, g: 255, b: 255 })).toBeCloseTo(1, 5)
+  })
+
+  test("同时接受 0-1 与 0-255 两种分量刻度", () => {
+    expect(relativeLuma({ r: 1, g: 1, b: 1 })).toBeCloseTo(1, 5)
+    expect(relativeLuma({ r: 255, g: 255, b: 255 })).toBeCloseTo(1, 5)
+  })
+
+  test("ayu 实测值可复现", () => {
+    // border #6c7380 与 background #0b0e14，实测 luma 0.45 / 0.05
+    expect(relativeLuma({ r: 0x6c, g: 0x73, b: 0x80 })).toBeCloseTo(0.45, 2)
+    expect(relativeLuma({ r: 0x0b, g: 0x0e, b: 0x14 })).toBeCloseTo(0.05, 2)
+  })
+})
+
+describe("hasEnoughContrast", () => {
+  test("ayu 的 border vs background 差值足够（0.40）", () => {
+    expect(
+      hasEnoughContrast({ r: 0x6c, g: 0x73, b: 0x80 }, { r: 0x0b, g: 0x0e, b: 0x14 }),
+    ).toBe(true)
+  })
+
+  test("ayu 的 borderSubtle vs background 差值不足（0.03）—— 正是不能拿它做轨道的原因", () => {
+    expect(
+      hasEnoughContrast({ r: 0x11, g: 0x15, b: 0x1c }, { r: 0x0b, g: 0x0e, b: 0x14 }),
+    ).toBe(false)
+  })
+
+  test("阈值可注入", () => {
+    const a = { r: 128, g: 128, b: 128 }
+    const b = { r: 100, g: 100, b: 100 }
+    expect(hasEnoughContrast(a, b, 0.01)).toBe(true)
+    expect(hasEnoughContrast(a, b, 0.9)).toBe(false)
+  })
+
+  test("非法输入按无对比度处理，不抛错", () => {
+    expect(hasEnoughContrast(undefined, { r: 0, g: 0, b: 0 })).toBe(false)
+    expect(hasEnoughContrast({ r: 0, g: 0, b: 0 }, undefined)).toBe(false)
+  })
+})
+
+describe("barFilled", () => {
+  test("与 formatBar 的字符数始终一致（同一处计算，不会算出两个结果）", () => {
+    for (const p of [0, 1, 8, 26, 53, 55, 99, 100, -50, 250, Number.NaN]) {
+      for (const w of [10, 14, 20]) {
+        expect(barFilled(p, w)).toBe([...formatBar(p, w)].filter((c) => c === "█").length)
+      }
+    }
+  })
+
+  test("默认宽度取 BAR_WIDTH=14（方向 B 的布局预算）", () => {
+    expect(barFilled(100)).toBe(14)
+    expect(barFilled(50)).toBe(7)
+    expect(barFilled(0)).toBe(0)
+  })
+
+  test("格数永不越界", () => {
+    for (const p of [-999, 0, 100, 999, Number.NaN, Number.POSITIVE_INFINITY]) {
+      const n = barFilled(p, 14)
+      expect(n).toBeGreaterThanOrEqual(0)
+      expect(n).toBeLessThanOrEqual(14)
+    }
   })
 })
