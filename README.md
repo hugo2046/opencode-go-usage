@@ -2,8 +2,6 @@
 
 opencode TUI 插件：在侧栏展示 OpenCode Go 套餐的 5 小时 / 每周 / 每月额度。
 
-## 显示内容
-
 ```
 OpenCode Go
 5 小时用量             8%
@@ -19,51 +17,48 @@ OpenCode Go
 
 渲染在 `sidebar_content` slot，紧随 opencode 自带的 `Context` / `MCP` / `LSP` 小节之后。
 
-### 侧栏排序（order）
+## 文档
 
-`sidebar_content` 是叠加模式，各插件按 `order` 升序排列。从 opencode 1.18.30 二进制解出的内置 order 表：
-
-| 插件 id | order |
+| 文档 | 读它来 |
 |---|---|
-| `internal:sidebar-context` | 100 |
-| `internal:sidebar-mcp` | 200 |
-| `internal:sidebar-lsp` | 300 |
-| `internal:sidebar-todo` | 400 |
-| `internal:sidebar-files` | 500 |
+| [安装指南](docs/安装指南_20260916.md) | 从零到看见额度，三步 |
+| [排障指南](docs/排障指南_20260916.md) | 装了看不到、位置不对、数字不更新 |
+| [配置与行为契约](docs/配置与行为契约_20260916.md) | 每个常量、格式、失败态的准确定义 |
+| [手工验证清单](docs/OpenCodeGo额度侧栏_手工验证清单_20260916.md) | 7 项需人工判断的验收 |
+| [设计规格](docs/superpowers/specs/OpenCodeGo额度侧栏_20260916.md) | 为什么这样设计，含调研结论与"明确不做"清单 |
 
-本插件用 `order: 350`，落在 `LSP`(300) 与 `Todo`(400) 之间，即"紧随 Context / MCP / LSP 小节之后"。这是与宿主的隐式契约，宿主升级调整内置 order 时需要同步复核。
+## 快速安装
 
-## 安装
-
-需要 opencode >= 1.18.30，以及 [bun](https://bun.sh)（本机验证版本 1.3.14）。
+需要 opencode **≥ 1.18.30** 和 [bun](https://bun.sh)。
 
 ```bash
-cd ~/workspace/opencode-go-usage && bun install
+export REPO="$HOME/workspace/opencode-go-usage"
+cd "$REPO" && bun install
 ```
 
-在 `~/.config/opencode/tui.json` 注册（**不是** `opencode.json`，后者只加载 server 端插件）：
+注册到 `~/.config/opencode/tui.json`（**不是** `opencode.json`，后者只加载 server 端插件）：
 
-```jsonc
+```json
 {
   "$schema": "https://opencode.ai/tui.json",
-  "plugin": ["/Users/hugo/workspace/opencode-go-usage/tui.tsx"]
+  "plugin": ["/绝对路径/opencode-go-usage/tui.tsx"]
 }
 ```
 
-重启 opencode 生效。
+重启 opencode 生效。`plugin` 里必须是绝对路径。
+
+已有 `tui.json` 时用[安装指南](docs/安装指南_20260916.md#step-2-注册插件)里的幂等合并命令，它会保留你原有的配置和其他插件。
+
+**没看到额度小节？** 这是常见情况——插件有四条静默失败路径，全都表现成"整节不显示"。[排障指南](docs/排障指南_20260916.md#先跑这一条数据层诊断)里有一条命令能直接定位。
 
 ## 密钥
 
-按以下顺序解析，插件自身不存储任何副本：
+按顺序解析，插件不存任何副本：
 
 1. 环境变量 `OPENCODE_GO_API_KEY`
 2. opencode 自己的 `<stateDir>/auth.json` 里的 `opencode-go.key`
 
-`stateDir` 取 `api.state.path.state`；若为空则回退到平台默认值，macOS / Linux 上是
-`$XDG_DATA_HOME/opencode`（未设置 `XDG_DATA_HOME` 时为 `~/.local/share/opencode`），
-Windows 上是 `%LOCALAPPDATA%\opencode`。想手工确认密钥位置（`<stateDir>/auth.json`）时可直接看这里，不必翻 spec。
-
-没有密钥、没有 Go 套餐、或密钥失效时，整节不渲染 —— 不占行、不报错。
+所以 `opencode auth login` 登录过 OpenCode Go 就是零配置。`stateDir` 的推断规则见[配置与行为契约 §2](docs/配置与行为契约_20260916.md#2-密钥解析)。
 
 ## 刷新
 
@@ -74,9 +69,11 @@ Windows 上是 `%LOCALAPPDATA%\opencode`。想手工确认密钥位置（`<state
 
 ## 已知限制
 
-上游 `/zen/go/v1/usage` 只返回**整数**百分比与 `resetsAt`，不返回 token 数或金额。
-opencode 官方 web dashboard 显示的一位小数（如 `8.1%`）来自另一条更精细的通路，
-本插件无法取到，因此只显示 `8%`。
+上游 `/zen/go/v1/usage` 只返回**整数**百分比与 `resetsAt`，不返回 token 数或金额。opencode 官方 web dashboard 显示的一位小数（如 `8.1%`）来自另一条更精细的通路，本插件取不到，因此只显示 `8%`。
+
+## 侧栏位置
+
+用 `order: 350`，落在内置 `LSP`(300) 与 `Todo`(400) 之间。这是与宿主的隐式契约——`sidebar_content` 按 `order` 升序排，宿主升级调整内置 order 时需要复核。完整 order 表与改法见[配置与行为契约 §4](docs/配置与行为契约_20260916.md#4-侧栏排序契约)。
 
 ## 测试
 
@@ -84,4 +81,12 @@ opencode 官方 web dashboard 显示的一位小数（如 `8.1%`）来自另一�
 bun test
 ```
 
-只覆盖 `usage.ts` 的纯函数（密钥解析、取数三态、格式化）；`tui.tsx` 的渲染靠手工验证。
+41 个用例，只覆盖 `usage.ts` 的纯函数（密钥解析、取数三态、刷新状态机、格式化）。`tui.tsx` 的渲染没有单测，靠 `bunx tsc --noEmit` 加[手工验证清单](docs/OpenCodeGo额度侧栏_手工验证清单_20260916.md)。
+
+## 卸载
+
+```bash
+rm ~/.config/opencode/tui.json
+```
+
+重启 opencode。你原有的 `opencode.json` / `opencode.jsonc` 从未被本插件改动。
