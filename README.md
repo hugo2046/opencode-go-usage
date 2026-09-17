@@ -159,3 +159,7 @@ bunx tsc --noEmit     # 类型检查
 ## 卸载
 
 从 `~/.config/opencode/tui.json` 的 `plugin` 数组里删掉本插件那一项（如果这个文件里只有本插件，也可以直接删掉整个文件），然后重启 opencode。本插件从不改动你的 `opencode.json`。
+
+## 许可证
+
+[MIT](LICENSE)

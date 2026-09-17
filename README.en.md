@@ -163,3 +163,7 @@ bunx tsc --noEmit     # type check
 ## Uninstall
 
 Remove this plugin's entry from the `plugin` array in `~/.config/opencode/tui.json` (or delete the whole file if this plugin is the only entry), then restart opencode. This plugin never touches your `opencode.json`.
+
+## License
+
+[MIT](LICENSE)
