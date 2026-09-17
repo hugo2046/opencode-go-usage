@@ -4,6 +4,7 @@ import { tmpdir } from "node:os"
 import { join } from "node:path"
 import {
   AUTH_PROVIDER,
+  BAR_GLYPH,
   DEFAULT_BASE_URL,
   ROWS,
   ENV_KEY,
@@ -17,8 +18,10 @@ import {
   formatPercent,
   hasEnoughContrast,
   parseOptions,
+  pickTrackColor,
   relativeLuma,
   resolveKey,
+  STYLE_COMMANDS,
   toneOf,
   type Snapshot,
   type Usage,
@@ -548,6 +551,12 @@ describe("barFilled", () => {
   })
 })
 
+describe("TUI meter glyph", () => {
+  test("使用细横线而不是整格背景柱", () => {
+    expect(BAR_GLYPH).toBe("─")
+  })
+})
+
 describe("parseOptions", () => {
   test("缺省时给出默认值：紧凑样式 + order 350", () => {
     expect(parseOptions(undefined)).toEqual({ style: "compact", order: 350 })
@@ -555,9 +564,10 @@ describe("parseOptions", () => {
     expect(parseOptions({})).toEqual({ style: "compact", order: 350 })
   })
 
-  test("识别两种样式", () => {
+  test("识别三种样式", () => {
     expect(parseOptions({ style: "compact" }).style).toBe("compact")
     expect(parseOptions({ style: "detailed" }).style).toBe("detailed")
+    expect(parseOptions({ style: "ledger" }).style).toBe("ledger")
   })
 
   test("样式写错时回退到 compact 而不是抛错", () => {
@@ -607,5 +617,36 @@ describe("ROWS 的两套标签", () => {
 
   test("紧凑标签都是 2 个中文字符（等宽 4 列，布局预算依赖这一点）", () => {
     for (const r of ROWS) expect(r.label.length).toBe(2)
+  })
+})
+
+describe("STYLE_COMMANDS", () => {
+  test("为三种样式提供独立的 slash 命令", () => {
+    expect(STYLE_COMMANDS.map((command) => command.style)).toEqual([
+      "compact",
+      "detailed",
+      "ledger",
+    ])
+    expect(STYLE_COMMANDS.map((command) => command.slashName)).toEqual([
+      "go-usage-compact",
+      "go-usage-detailed",
+      "go-usage-ledger",
+    ])
+  })
+})
+
+describe("pickTrackColor", () => {
+  test("浅色主题的可见边框直接作为轨道色", () => {
+    const border = { r: 0.35, g: 0.35, b: 0.35 }
+    const background = { r: 1, g: 1, b: 1 }
+    const textMuted = { r: 0.55, g: 0.55, b: 0.55 }
+    expect(pickTrackColor({ border, background, textMuted })).toEqual(border)
+  })
+
+  test("深浅主题的边框不可见时回退到 textMuted", () => {
+    const border = { r: 0.11, g: 0.11, b: 0.11 }
+    const background = { r: 0.1, g: 0.1, b: 0.1 }
+    const textMuted = { r: 0.45, g: 0.45, b: 0.45 }
+    expect(pickTrackColor({ border, background, textMuted })).toEqual(textMuted)
   })
 })

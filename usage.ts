@@ -281,6 +281,9 @@ export function createRefresher(deps: RefresherDeps): Refresher {
 /** 进度条格数。 */
 export const BAR_WIDTH = 14
 
+/** TUI meter 使用的细线字符，避免整格背景色造成柱体过粗。 */
+export const BAR_GLYPH = "─"
+
 /** 侧栏三行的渲染顺序与中文标签。 */
 export const ROWS = [
   { key: "rolling", label: "滚动", labelLong: "5 小时用量" },
@@ -299,7 +302,7 @@ export type Tone = "ok" | "warn" | "danger"
  * @returns 由 █ 与 ░ 组成的定长字符串
  */
 /**
- * 进度条里「已用」的格数，色块版与字符版共用这一处计算。
+ * 进度条里「已用」的格数，TUI meter 与字符版共用这一处计算。
  *
  * @param percent 已用百分比，越界或非法值会被夹到 0-100
  * @param width 总格数
@@ -314,9 +317,9 @@ export function barFilled(percent: number, width: number = BAR_WIDTH): number {
 /**
  * 渲染定宽进度条的字符版本。
  *
- * TUI 渲染走的是带背景色的实心色块（见 tui.tsx 的 UsageRow），不用这个；
+ * TUI 渲染走的是细线 glyph（见 tui.tsx 的 Bar），不用这个；
  * 它留给脱离终端的场景——排障文档里那条数据层诊断命令就靠它在普通 stdout
- * 上打出条子。格数与色块版共用 {@link barFilled}，两者不会算出不同结果。
+ * 上打出条子。格数与 TUI meter 共用 {@link barFilled}，两者不会算出不同结果。
  *
  * @param percent 已用百分比，越界或非法值会被夹到 0-100
  * @param width 格数
@@ -459,19 +462,79 @@ export function hasEnoughContrast(
   return Math.abs(la - lb) >= minDelta
 }
 
-/** 详细样式（样式 B）的进度条格数：它独占一行，所以可以比紧凑样式长。 */
+/** 主题色输入，用于选择在当前背景上可见的未使用轨道色。 */
+export type TrackColorInput<Color extends RgbLike = RgbLike> = {
+  /** 主题边框色。 */
+  border: Color
+  /** 主题背景色。 */
+  background: RgbLike
+  /** 主题弱文本色，作为边框不可见时的回退。 */
+  textMuted: Color
+}
+
+/**
+ * 为进度条选择能适配浅色和深色主题的轨道色。
+ *
+ * @param colors 当前主题的边框、背景与弱文本色
+ * @returns 在背景上有足够亮度差的边框色，或 textMuted 回退色
+ */
+export function pickTrackColor<Color extends RgbLike>(colors: TrackColorInput<Color>): Color {
+  return hasEnoughContrast(colors.border, colors.background) ? colors.border : colors.textMuted
+}
+
+/** 详细样式（样式 A）的进度条格数：它独占一行，所以可以比紧凑样式长。 */
 export const BAR_WIDTH_DETAILED = 20
 
 /** 可选的展示样式。 */
-export type StyleName = "compact" | "detailed"
+export type StyleName = "compact" | "detailed" | "ledger"
+
+/** 可通过 OpenCode command palette / slash command 切换的样式命令。 */
+export type StyleCommand = {
+  /** 命令切换到的样式。 */
+  readonly style: StyleName
+  /** keymap 中的稳定命令名。 */
+  readonly name: string
+  /** command palette 中显示的标题。 */
+  readonly title: string
+  /** command palette 中显示的说明。 */
+  readonly description: string
+  /** slash command 名称，不含前导斜杠。 */
+  readonly slashName: string
+}
+
+/** 三种布局的命令元数据；命令只切换布局，不触发额度请求。 */
+export const STYLE_COMMANDS: readonly StyleCommand[] = [
+  {
+    style: "compact",
+    name: "opencode-go-usage.style.compact",
+    title: "OpenCode Go：紧凑样式",
+    description: "三条横向用量条，适合快速扫读",
+    slashName: "go-usage-compact",
+  },
+  {
+    style: "detailed",
+    name: "opencode-go-usage.style.detailed",
+    title: "OpenCode Go：详细样式",
+    description: "完整显示每档额度的进度与重置倒计时",
+    slashName: "go-usage-detailed",
+  },
+  {
+    style: "ledger",
+    name: "opencode-go-usage.style.ledger",
+    title: "OpenCode Go：账本样式",
+    description: "突出 5 小时窗口，周/月作为次级信息",
+    slashName: "go-usage-ledger",
+  },
+]
 
 /** 插件配置，全部有默认值。 */
 export type PluginOptions = {
   /**
    * 展示样式。
    *
-   * - `compact`（默认，样式 A）：一行一档 —— 标签、14 格实心条、百分比、紧凑倒计时
-   * - `detailed`（样式 B）：三行一档 —— 标签与百分比一行、20 格实心条一行、完整中文倒计时一行
+   * - `compact`（默认，样式 B）：一行一档 —— 标签、14 格实心条、百分比、紧凑倒计时
+   * - `detailed`（样式 A）：三行一档 —— 标签与百分比一行、20 格实心条一行、完整中文倒计时一行
+   * - `ledger`（样式 C）：5 小时窗口主指标 + 周/月次级账本行
    */
   style: StyleName
   /** 侧栏 slot 的 order，决定小节排在哪两个内置小节之间。 */
@@ -485,7 +548,7 @@ const DEFAULT_STYLE: StyleName = "compact"
 const DEFAULT_ORDER = 350
 
 /** 合法样式名集合，用于校验用户手写的配置。 */
-const STYLE_NAMES: readonly StyleName[] = ["compact", "detailed"]
+const STYLE_NAMES: readonly StyleName[] = ["compact", "detailed", "ledger"]
 
 /**
  * 解析 tui.json 里传给插件的 options。

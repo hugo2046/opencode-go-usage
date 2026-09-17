@@ -2,13 +2,27 @@
 
 opencode TUI 插件：在侧栏展示 OpenCode Go 套餐的 5 小时 / 每周 / 每月额度。
 
-<img src="images/sidebar-go-usage.png" alt="opencode 侧栏里的 OpenCode Go 额度小节，detailed 样式：每档三行，标签与百分比一行、进度条一行、重置倒计时一行" width="340">
+<img src="images/go-usage-detailed.png" alt="OpenCode Go 额度侧栏的 detailed 样式实际截图" width="340">
 
-> 上图是 `detailed` 样式。默认的 `compact` 样式是一行一档，见下面的[配置](#配置)。
+> 上图是 `detailed` 样式。默认的 `compact` 样式是一行一档；另有突出 5 小时窗口的 `ledger` 样式，见下面的[配置](#配置)。
 
-每档展示标签、实心进度条、百分比、重置倒计时。有 `compact`（一行一档，默认）与 `detailed`（三行一档）两种样式，见[配置](#配置)。
+每档展示标签、细线 meter、百分比、重置倒计时。有 `compact`（一行一档，默认）、`detailed`（三行一档）与 `ledger`（5 小时主指标 + 周/月次级行）三种样式，见[配置](#配置)。
 
-进度条是带背景色的实心色块（不是 `█` 字符），颜色全部取自主题的语义 token，所以深色浅色主题都自动跟随。渲染在 `sidebar_content` slot；节标题的颜色与粗体跟宿主的 `Context` / `MCP` / `LSP` 一致。
+进度条现在使用主题语义色绘制细线 meter，不再用整行背景色空格撑出厚柱体，所以深色浅色主题都自动跟随。渲染在 `sidebar_content` slot；节标题的颜色与粗体跟宿主的 `Context` / `MCP` / `LSP` 一致。
+
+## 实际样式截图
+
+### A · detailed
+
+<img src="images/go-usage-detailed.png" alt="detailed 样式" width="340">
+
+### B · compact
+
+<img src="images/go-usage-compact.png" alt="compact 样式" width="340">
+
+### C · ledger
+
+<img src="images/go-usage-ledger.png" alt="ledger 样式" width="340">
 
 ## 文档
 
@@ -17,7 +31,8 @@ opencode TUI 插件：在侧栏展示 OpenCode Go 套餐的 5 小时 / 每周 / 
 | [安装指南](docs/安装指南_20260916.md) | 从零到看见额度，三步 |
 | [排障指南](docs/排障指南_20260916.md) | 装了看不到、位置不对、数字不更新 |
 | [配置与行为契约](docs/配置与行为契约_20260916.md) | 每个常量、格式、失败态的准确定义 |
-| [手工验证清单](docs/OpenCodeGo额度侧栏_手工验证清单_20260916.md) | 7 项需人工判断的验收 |
+| [样式切换指南](docs/OpenCodeGo样式切换指南_20260917.md) | 配置、命令、截图与浅深主题验证 |
+| [手工验证清单](docs/OpenCodeGo额度侧栏_手工验证清单_20260916.md) | 8 项需人工判断的验收 |
 | [设计规格](docs/superpowers/specs/OpenCodeGo额度侧栏_20260916.md) | 为什么这样设计，含调研结论与"明确不做"清单 |
 
 ## 快速安装
@@ -70,27 +85,27 @@ cd "$REPO" && bun install
 {
   "$schema": "https://opencode.ai/tui.json",
   "plugin": [
-    ["/绝对路径/opencode-go-usage/tui.tsx", { "style": "detailed", "order": 600 }]
+    ["/绝对路径/opencode-go-usage/tui.tsx", { "style": "ledger", "order": 600 }]
   ]
 }
 ```
 
 | 字段 | 取值 | 默认 | 说明 |
 |---|---|---|---|
-| `style` | `"compact"` \| `"detailed"` | `"compact"` | 展示样式，见下 |
+| `style` | `"compact"` \| `"detailed"` \| `"ledger"` | `"compact"` | 展示样式，见下 |
 | `order` | 数字 | `350` | 侧栏位置。`350` 在 LSP 与 Todo 之间；`600` 沉到最底。完整 order 表见[配置与行为契约 §5](docs/配置与行为契约_20260916.md#5-侧栏排序契约) |
 
 改完**重启 opencode**（`tui.json` 只在启动时读）。值写错会静默回退到默认，不会让插件加载失败。
 
-### 两种样式
+### 三种样式
 
 **`compact`（默认）** —— 一行一档，占 3 行：
 
 ```
 OpenCode Go
-滚动  █░░░░░░░░░░░░░   8%   4h58m
-本周  ████████░░░░░░  55%   4d10h
-本月  ████░░░░░░░░░░  27%  27d16h
+滚动  ━─────────────   8%   4h58m
+本周  ━━━━━━━━──────  55%   4d10h
+本月  ━━━━──────────  27%  27d16h
 ```
 
 **`detailed`** —— 三行一档，占 9 行；条子更长（20 格），标签与倒计时用完整措辞：
@@ -98,17 +113,42 @@ OpenCode Go
 ```
 OpenCode Go
 5 小时用量           8%
-██░░░░░░░░░░░░░░░░░░
+━━──────────────────
 重置于 4 小时 58 分钟
 每周用量            55%
-███████████░░░░░░░░░
+━━━━━━━━━━━─────────
 重置于 4 天 10 小时
 每月用量            27%
-█████░░░░░░░░░░░░░░░
+━━━━━───────────────
 重置于 27 天 16 小时
 ```
 
-两种样式的进度条都是带背景色的实心色块，配色也一致（见[配置与行为契约 §6](docs/配置与行为契约_20260916.md#6-渲染规格)）；区别只在信息密度与占用行数。
+三种样式共用同一套细线 meter，已用段和轨道段只改变主题前景色（见[配置与行为契约 §6](docs/配置与行为契约_20260916.md#6-渲染规格)）；区别只在信息密度与占用行数。
+
+**`ledger`** —— 5 小时窗口作为主指标，周/月作为次级账本行：
+
+```
+额度账本
+5 小时滚动窗口                   8%
+━━──────────────────
+重置于 4 小时 58 分钟
+周    ━━━━━━━───────   55%
+月    ━━━━──────────   27%
+```
+
+三种样式都只使用 OpenCode 当前主题的语义颜色：`success` / `warning` / `error` / `textMuted` / `border`。切换浅色或深色主题时，文字、进度条、账本背景和轨道会一起适配。
+
+### 命令切换
+
+OpenCode 新版的命令面板支持以下 slash command；命令只切换当前 TUI 会话的布局，重启后仍按 `tui.json` 的 `style` 配置启动：
+
+```
+/go-usage-compact
+/go-usage-detailed
+/go-usage-ledger
+```
+
+如果宿主版本没有可用的 keymap 命令注册能力，侧栏仍会正常加载，改 `tui.json` 后重启即可切换。
 
 ## 已知限制
 
@@ -120,7 +160,7 @@ OpenCode Go
 bun test
 ```
 
-41 个用例，只覆盖 `usage.ts` 的纯函数（密钥解析、取数三态、刷新状态机、格式化）。`tui.tsx` 的渲染没有单测，靠 `bunx tsc --noEmit` 加[手工验证清单](docs/OpenCodeGo额度侧栏_手工验证清单_20260916.md)。
+79 个用例，覆盖 `usage.ts` 的纯函数和 TUI 样式命令接线。`tui.tsx` 的渲染靠 `bunx tsc --noEmit` 加[手工验证清单](docs/OpenCodeGo额度侧栏_手工验证清单_20260916.md)。
 
 ## 卸载
 
