@@ -1,8 +1,14 @@
-import { afterEach, describe, expect, test } from "bun:test"
+import { afterEach, describe, expect, spyOn, test } from "bun:test"
+import { mkdtempSync } from "node:fs"
+import { tmpdir } from "node:os"
+import { join } from "node:path"
+import type { Context, KeymapCommand, SlotClaim } from "@opencode/plugin/tui/context"
+import { RGBA } from "@opentui/core"
 import { testRender } from "@opentui/solid"
 
 const originalFetch = globalThis.fetch
 const originalApiKey = process.env.OPENCODE_GO_API_KEY
+const originalXdgDataHome = process.env.XDG_DATA_HOME
 const renderers: Array<{ destroy: () => void }> = []
 
 afterEach(() => {
@@ -10,6 +16,8 @@ afterEach(() => {
   globalThis.fetch = originalFetch
   if (originalApiKey === undefined) delete process.env.OPENCODE_GO_API_KEY
   else process.env.OPENCODE_GO_API_KEY = originalApiKey
+  if (originalXdgDataHome === undefined) delete process.env.XDG_DATA_HOME
+  else process.env.XDG_DATA_HOME = originalXdgDataHome
 })
 
 function usageResponse() {
@@ -25,76 +33,250 @@ function usageResponse() {
   )
 }
 
+function color(hex: string) {
+  return RGBA.fromHex(hex)
+}
+
 function fakeTheme() {
   return {
-    mode: () => "dark" as const,
-    selected: "dark",
-    ready: true,
-    has: () => true,
-    set: () => true,
-    install: async () => {},
-    current: {
-      text: "#eeeeee",
-      textMuted: "#999999",
-      error: "#ff5555",
-      warning: "#ffaa00",
-      success: "#66dd88",
-      border: "#333333",
-      background: "#111111",
-      backgroundPanel: "#1b1b1b",
-      borderActive: "#66dd88",
+    text: {
+      base: color("#eeeeee"),
+      muted: color("#999999"),
+      feedback: {
+        error: { base: color("#ff5555") },
+        warning: { base: color("#ffaa00") },
+        success: { base: color("#66dd88") },
+        info: { base: color("#66aaff") },
+      },
+      action: {
+        primary: { base: color("#66dd88") },
+      },
     },
+    background: {
+      base: color("#111111"),
+      raised: { base: color("#1b1b1b") },
+    },
+    border: { base: color("#333333") },
   }
 }
 
-describe("TUI 样式命令", () => {
-  test("命令注册提供三个样式入口，宿主重新解析 slot 后使用新布局", async () => {
+type Claim = Extract<SlotClaim, { append: "sidebar.content" }>
+
+type Command = KeymapCommand
+
+describe("V2 TUI 接线", () => {
+  test("注册 sidebar.content、三个样式命令，并能在命令后切换布局", async () => {
     process.env.OPENCODE_GO_API_KEY = "test-key"
     globalThis.fetch = async () => usageResponse()
 
     const { default: plugin } = await import("../tui.tsx")
-    const commands: Array<{ slashName: string; run: () => void }> = []
-    const entries: Array<{ slots: { sidebar_content: (ctx: { theme: unknown }) => unknown } }> = []
-    const cleanups: Array<() => void> = []
-    const api = {
-      state: { path: { state: "" } },
-      event: { on: () => () => {} },
-      lifecycle: { onDispose: (fn: () => void) => cleanups.push(fn) },
-      keymap: {
-        registerLayer: (layer: { commands: Array<{ slashName: string; run: () => void }> }) => {
-          commands.push(...layer.commands)
-          return () => {}
+    const claims: Claim[] = []
+    const commands: Command[] = []
+    const toasts: Array<{ message: string; variant?: string }> = []
+    let offIdleCalls = 0
+
+    const ctx = {
+      options: { style: "compact" },
+      theme: fakeTheme(),
+      data: {
+        on: (type: string, _handler: () => void) => {
+          if (type !== "session.idle") return () => {}
+          return () => {
+            offIdleCalls++
+          }
         },
       },
-      ui: { toast: () => {} },
-      slots: {
-        register: (entry: { slots: { sidebar_content: (ctx: { theme: unknown }) => unknown } }) => {
-          entries.push(entry)
-          return "slot"
+      keymap: {
+        layer: (factory: () => { commands?: readonly Command[] }) => {
+          const layer = factory()
+          commands.push(...(layer.commands ?? []))
+        },
+      },
+      ui: {
+        slot: (claim: Claim) => {
+          claims.push(claim)
+          return () => {}
+        },
+        toast: {
+          show: (options: { message: string; variant?: string }) => {
+            toasts.push(options)
+          },
         },
       },
     }
 
-    await plugin.tui(api as never, { style: "compact" }, {} as never)
+    const cleanup = await plugin.setup(ctx as unknown as Context)
     await new Promise((resolve) => setTimeout(resolve, 0))
 
-    const setup = await testRender(
-      () => entries[0]!.slots.sidebar_content({ theme: fakeTheme() }),
-      { width: 42, height: 30 },
-    )
-    renderers.push(setup.renderer)
-    await setup.waitForFrame((frame) => frame.includes("滚动"), { maxPasses: 20 })
+    expect(claims).toHaveLength(1)
+    expect(claims[0]!.append).toBe("sidebar.content")
+    expect(commands.map((command) => command.slash?.name)).toEqual([
+      "go-usage-compact",
+      "go-usage-detailed",
+      "go-usage-ledger",
+    ])
 
-    commands.find((command) => command.slashName === "go-usage-ledger")!.run()
+    const first = await testRender(() => claims[0]!.render({ sessionID: "ses_test" }), {
+      width: 42,
+      height: 30,
+    })
+    renderers.push(first.renderer)
+    await first.waitForFrame((frame) => frame.includes("滚动"), { maxPasses: 20 })
 
-    const switched = await testRender(
-      () => entries[0]!.slots.sidebar_content({ theme: fakeTheme() }),
-      { width: 42, height: 30 },
-    )
+    commands.find((command) => command.slash?.name === "go-usage-ledger")!.run()
+    expect(toasts.at(-1)).toEqual({
+      variant: "success",
+      message: "OpenCode Go：已切换到 ledger 样式",
+    })
+
+    // bun test 下 @opentui/solid 走 Solid 的 server 构建，不能可靠驱动已挂载树的
+    // 细粒度更新；这里用第二个 renderer 读取同一组 signal。真实 OpenCode 2.1.2
+    // 里的原地切换已在手工验证中确认。
+    const switched = await testRender(() => claims[0]!.render({ sessionID: "ses_test" }), {
+      width: 42,
+      height: 30,
+    })
     renderers.push(switched.renderer)
-    await switched.waitForFrame((frame) => frame.includes("5 小时滚动窗口"), { maxPasses: 20 })
+    await switched.waitForFrame((frame) => frame.includes("5 小时滚动窗口"), {
+      maxPasses: 20,
+    })
     expect(switched.captureCharFrame()).toContain("5 小时滚动窗口")
 
-    for (const cleanup of cleanups) cleanup()
+    const clearIntervalSpy = spyOn(globalThis, "clearInterval")
+    try {
+      await cleanup?.()
+      expect(offIdleCalls).toBe(1)
+      expect(clearIntervalSpy).toHaveBeenCalledTimes(2)
+    } finally {
+      clearIntervalSpy.mockRestore()
+    }
+  })
+
+  test("detailed 样式渲染完整标签", async () => {
+    process.env.OPENCODE_GO_API_KEY = "test-key"
+    globalThis.fetch = async () => usageResponse()
+
+    const { default: plugin } = await import("../tui.tsx")
+    let claim: Claim | undefined
+    const ctx = {
+      options: { style: "detailed" },
+      theme: fakeTheme(),
+      data: { on: () => () => {} },
+      keymap: { layer: () => {} },
+      ui: {
+        slot: (value: Claim) => {
+          claim = value
+          return () => {}
+        },
+        toast: { show: () => {} },
+      },
+    }
+
+    const cleanup = await plugin.setup(ctx as unknown as Context)
+    await new Promise((resolve) => setTimeout(resolve, 0))
+
+    const setup = await testRender(() => claim!.render({ sessionID: "ses_test" }), {
+      width: 42,
+      height: 30,
+    })
+    renderers.push(setup.renderer)
+    await setup.waitForFrame((frame) => frame.includes("5 小时用量"), { maxPasses: 20 })
+    expect(setup.captureCharFrame()).toContain("5 小时用量")
+
+    await cleanup?.()
+  })
+
+  test("soft-error 后标题显示感叹号并保留旧快照", async () => {
+    process.env.OPENCODE_GO_API_KEY = "test-key"
+    let calls = 0
+    globalThis.fetch = async () => {
+      calls++
+      return calls === 1 ? usageResponse() : new Response("{}", { status: 500 })
+    }
+
+    const { default: plugin } = await import("../tui.tsx")
+    let claim: Claim | undefined
+    let idle: (() => void) | undefined
+    let now = 1_000_000
+    const nowSpy = spyOn(Date, "now").mockImplementation(() => now)
+
+    const ctx = {
+      options: { style: "compact" },
+      theme: fakeTheme(),
+      data: {
+        on: (type: string, handler: () => void) => {
+          if (type === "session.idle") idle = handler
+          return () => {}
+        },
+      },
+      keymap: { layer: () => {} },
+      ui: {
+        slot: (value: Claim) => {
+          claim = value
+          return () => {}
+        },
+        toast: { show: () => {} },
+      },
+    }
+
+    try {
+      const cleanup = await plugin.setup(ctx as unknown as Context)
+      await new Promise((resolve) => setTimeout(resolve, 0))
+      expect(calls).toBe(1)
+
+      now += 21_000
+      idle?.()
+      await new Promise((resolve) => setTimeout(resolve, 0))
+      expect(calls).toBe(2)
+
+      const setup = await testRender(() => claim!.render({ sessionID: "ses_test" }), {
+        width: 42,
+        height: 30,
+      })
+      renderers.push(setup.renderer)
+      await setup.waitForFrame((frame) => frame.includes("OpenCode Go !"), { maxPasses: 20 })
+      expect(setup.captureCharFrame()).toContain("OpenCode Go !")
+
+      await cleanup?.()
+    } finally {
+      nowSpy.mockRestore()
+    }
+  })
+
+  test("没有环境变量时使用 credential store 里的 active key，而不是 auth.json", async () => {
+    delete process.env.OPENCODE_GO_API_KEY
+    process.env.XDG_DATA_HOME = mkdtempSync(join(tmpdir(), "ocgo-tui-"))
+
+    let authorization = ""
+    globalThis.fetch = async (_input, init) => {
+      authorization = new Headers(init?.headers).get("authorization") ?? ""
+      return usageResponse()
+    }
+
+    const { default: plugin } = await import("../tui.tsx")
+    const ctx = {
+      options: { style: "compact" },
+      theme: fakeTheme(),
+      data: { on: () => () => {} },
+      keymap: { layer: () => {} },
+      ui: {
+        slot: () => () => {},
+        toast: { show: () => {} },
+      },
+      client: {
+        credential: {
+          list: async () => [
+            { integrationID: "opencode-go", active: false, value: { type: "key", key: "stale" } },
+            { integrationID: "opencode-go", active: true, value: { type: "key", key: "oc_sk_active" } },
+          ],
+        },
+      },
+    }
+
+    const cleanup = await plugin.setup(ctx as unknown as Context)
+    await new Promise((resolve) => setTimeout(resolve, 10))
+
+    expect(authorization).toBe("Bearer oc_sk_active")
+    await cleanup?.()
   })
 })

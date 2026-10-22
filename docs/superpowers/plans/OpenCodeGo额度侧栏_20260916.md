@@ -1,5 +1,7 @@
 # OpenCode Go 额度侧栏 实施计划
 
+> **历史文档：** 本计划描述 `v0.1.0`（OpenCode V1 TUI 插件 API），仅用于追溯原始实现。V2 迁移见 [2026-10-22 迁移计划](2026-10-22-opencode-v2-migration.md)。
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** 做一个 opencode TUI 插件，在侧栏纵向展示 OpenCode Go 套餐的 5 小时 / 每周 / 每月额度百分比、进度条与重置倒计时。

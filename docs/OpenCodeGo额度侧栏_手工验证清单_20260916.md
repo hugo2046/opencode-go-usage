@@ -3,7 +3,7 @@
 **日期：** 2026-09-17
 **对应实施计划：** `docs/superpowers/plans/OpenCodeGo额度侧栏_20260916.md` Task 4 Step 4 与"完成标准"
 
-自动化部分已全部通过：`bunx tsc --noEmit` 干净、`bun test` 79/79、数据层已在真实上游端点端到端验证。
+自动化部分已全部通过：`bunx tsc --noEmit` 干净、`bun test` 78/78、数据层已在真实上游端点端到端验证。
 以下 8 项是**只有你能判断**的部分（需重启 opencode、肉眼核对视觉与主题），实现过程中刻意未执行，
 以免中断你正在进行的 opencode 会话。
 
@@ -11,14 +11,11 @@
 
 重启 opencode，进入任意会话，确认侧栏出现 `OpenCode Go` 小节，且：
 
-- 位置在 `Context` / `MCP` / `LSP` **之下**；
-- 若当前会话有 todo 或文件改动，`OpenCode Go` 应在 **Todo / Files 之上**（插件 `order: 350`，落在内置 `lsp`=300 与 `todo`=400 之间）；
-- 三个窗口顺序是 **滚动 → 本周 → 本月**；具体行数与信息密度由 `style` 决定，统一包含标签、细线 meter、百分比和倒计时。
-- 在 `tui.json` 里分别设置 `style` 为 `compact`、`detailed`、`ledger`，重启后布局分别切换成功。
+- 位置在内置 `Context` / `MCP` / `LSP` / `Todo` / `Files` 小节**之后**（V2 的 `sidebar.content` 只能 append）；
+- 三个窗口顺序是 **滚动 → 本周 → 本月**；具体行数与信息密度由 `style` 决定，统一包含标签、细线 meter、百分比和倒计时；
+- 在 `cli.json` 里分别设置 `style` 为 `compact`、`detailed`、`ledger`，重启后布局分别切换成功。
 
-> 如果你更希望额度沉到侧栏最底（排在 Todo / Files 之下），把 `tui.tsx` 里的 `order: 350` 改成 `order: 600` 即可。
->
-> 三种样式的实际运行截图与切换方法见[样式切换指南](OpenCodeGo样式切换指南_20260917.md)。
+> V2 没有 `order` 选项，位置不能通过配置改变。三种样式的实际运行截图与切换方法见[样式切换指南](OpenCodeGo样式切换指南_20260917.md)。
 
 ## 2. 百分比交叉核对
 
@@ -26,7 +23,7 @@
 curl -s -H "authorization: Bearer $OPENCODE_GO_API_KEY" https://opencode.ai/zen/go/v1/usage
 ```
 
-未设 `OPENCODE_GO_API_KEY` 环境变量时，密钥在 `~/.local/share/opencode/auth.json` 的 `opencode-go.key` 字段（不要把密钥值贴到聊天或日志里）。
+未设 `OPENCODE_GO_API_KEY` 环境变量时，密钥优先取 credential store 里 `opencode-go` 的 active 凭据（Connect / `opencode auth login` 写入），回退到 `~/.local/share/opencode/auth.json` 的 `opencode-go.key`（不要把密钥值贴到聊天或日志里）。
 
 比对返回 JSON 的 `rolling` / `weekly` / `monthly` 三个 `percent` 与侧栏显示是否一致。
 
@@ -34,7 +31,7 @@ curl -s -H "authorization: Bearer $OPENCODE_GO_API_KEY" https://opencode.ai/zen/
 
 ## 3. 各列对齐与配色
 
-按当前 `style` 检查进度条、百分比、倒计时的层级和对齐：`compact` 为每档一行，`detailed` 为每档三行，`ledger` 以滚动窗口主块配合周/月次级行；`compact` 的列宽预算是标签 4 + 条 14 + 百分比 4 + 倒计时 6。
+按当前 `style` 检查进度条、百分比、倒计时的层级和对齐：`compact` 为每档一行，`detailed` 为每档三行，`ledger` 以滚动窗口主块配合周/月次级行；`compact` 的列宽预算是标签 4 + 条 14 + 百分比 4 + 倒计时 6。`detailed` 还要核对完整标签（如 `5 小时用量`）和完整倒计时措辞。
 
 同时确认：
 
@@ -53,11 +50,15 @@ curl -s -H "authorization: Bearer $OPENCODE_GO_API_KEY" https://opencode.ai/zen/
 
 ## 6. 主题跟随
 
-分别在浅色与深色主题下验证，确认文字、进度条、ledger 主块背景和轨道都跟随 `theme.current`：正常态 `success` 色，≥70% `warning`，≥90% 或 `rate-limited` `error`。轨道不能融进背景。
+分别在浅色与深色主题下验证，确认文字、进度条、ledger 主块背景和轨道都跟随 V2 主题 token：正常态 `text.feedback.success.base`，≥70% `text.feedback.warning.base`，≥90% 或 `rate-limited` `text.feedback.error.base`。轨道用 `border.base`，不能融进背景。
 
 ## 7. 密钥失效场景
 
-临时 `unset OPENCODE_GO_API_KEY`，并把 `auth.json` 里的 `opencode-go` 键改名（如 `opencode-go-bak`），重启 opencode，确认 `OpenCode Go` 整节**消失**且 TUI 无报错。改回原名（并按需恢复环境变量）后重启，确认恢复显示。
+用一个无效密钥启动：`OPENCODE_GO_API_KEY=invalid opencode`，确认 `OpenCode Go` 整节**消失**且 TUI 无报错（环境变量优先级最高，会压过 credential store）。退出后恢复正常启动，确认恢复显示。
+
+> 不要再通过改 `auth.json` 来模拟"没有密钥"——只要 credential store 里有 active 凭据，插件就仍然能取到 key。
+
+再临时让上游返回 500（或断网），确认标题变为 `OpenCode Go !` 且旧数值保留；恢复网络后 `!` 应在下一次成功刷新时自动消失。
 
 ## 8. 命令切换
 
@@ -67,8 +68,8 @@ curl -s -H "authorization: Bearer $OPENCODE_GO_API_KEY" https://opencode.ai/zen/
 - `/go-usage-detailed`
 - `/go-usage-ledger`
 
-命令切换只影响当前 TUI 会话；重启后以 `tui.json` 的 `style` 为准。
+命令切换只影响当前 TUI 会话；重启后以 `cli.json` 的 `style` 为准。
 
 ## 卸载
 
-删除 `~/.config/opencode/tui.json` 即可完全回退。该文件由本次工作新建，你原有的 `opencode.jsonc` 未被改动。
+从 `~/.config/opencode/cli.json` 的 `plugins` 数组里删掉本插件项即可完全回退。该文件由本次工作修改，你原有的 `opencode.jsonc` 未被改动。
