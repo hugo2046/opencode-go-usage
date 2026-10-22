@@ -1,6 +1,6 @@
 # OpenCode V2 迁移实施计划
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [x]`) syntax for tracking.
 
 **Goal:** 把 `opencode-go-usage` 从 OpenCode V1 TUI 插件 API 迁移到 OpenCode V2 CLI 插件 API，保留额度取数、刷新与三种样式，删除 V2 不支持的 `order`。
 
@@ -42,7 +42,7 @@
 - Modify: `package.json`
 - Modify: `bun.lock`（由 `bun install` 生成）
 
-- [ ] **Step 1: 把 `package.json` 改成目标状态**
+- [x] **Step 1: 把 `package.json` 改成目标状态**
 
 ```json
 {
@@ -80,7 +80,7 @@
 }
 ```
 
-- [ ] **Step 2: 安装依赖**
+- [x] **Step 2: 安装依赖**
 
 Run:
 
@@ -90,7 +90,7 @@ bun install
 
 Expected: `bun install` 成功，`node_modules/@opencode/plugin` 存在，`node_modules/@opentui/solid` 版本为 `0.6.6`。
 
-- [ ] **Step 3: 确认版本**
+- [x] **Step 3: 确认版本**
 
 Run:
 
@@ -100,7 +100,7 @@ bun pm ls --all | grep -E "@opencode/plugin|@opentui/(core|solid)|@opencode/them
 
 Expected: 输出包含 `@opencode/plugin@2.1.2`、`@opentui/core@0.6.6`、`@opentui/solid@0.6.6`、`@opencode/theme@2.1.2`。
 
-- [ ] **Step 4: 提交**
+- [x] **Step 4: 提交**
 
 ```bash
 git add package.json bun.lock
@@ -115,7 +115,7 @@ git commit -m "build: 升级到 OpenCode V2 插件依赖"
 - Modify: `tests/usage.test.ts:560-610`
 - Modify: `usage.ts:530-575`
 
-- [ ] **Step 1: 把 `parseOptions` 测试改成只断言 `style`**
+- [x] **Step 1: 把 `parseOptions` 测试改成只断言 `style`**
 
 用下面的代码替换 `tests/usage.test.ts` 中整个 `describe("parseOptions", ...)` 块：
 
@@ -153,7 +153,7 @@ describe("parseOptions", () => {
 })
 ```
 
-- [ ] **Step 2: 跑测试确认失败**
+- [x] **Step 2: 跑测试确认失败**
 
 Run:
 
@@ -163,7 +163,7 @@ bun test tests/usage.test.ts
 
 Expected: FAIL。`parseOptions` 仍返回 `{ style, order }`，`toEqual({ style: "compact" })` 因多出 `order` 字段而失败。
 
-- [ ] **Step 3: 修改 `usage.ts`**
+- [x] **Step 3: 修改 `usage.ts`**
 
 把 `PluginOptions` 定义改成：
 
@@ -215,7 +215,7 @@ export function parseOptions(raw: unknown): PluginOptions {
 }
 ```
 
-- [ ] **Step 4: 跑测试确认通过**
+- [x] **Step 4: 跑测试确认通过**
 
 Run:
 
@@ -225,7 +225,7 @@ bun test tests/usage.test.ts
 
 Expected: PASS，`0 fail`。
 
-- [ ] **Step 5: 提交**
+- [x] **Step 5: 提交**
 
 ```bash
 git add usage.ts tests/usage.test.ts
@@ -239,7 +239,7 @@ git commit -m "refactor: 删除 V2 不支持的 order 配置"
 **Files:**
 - Modify: `tests/tui.test.tsx`（整文件替换）
 
-- [ ] **Step 1: 用 V2 假 context 重写测试**
+- [x] **Step 1: 用 V2 假 context 重写测试**
 
 把 `tests/tui.test.tsx` 替换为：
 
@@ -391,7 +391,7 @@ describe("V2 TUI 接线", () => {
 })
 ```
 
-- [ ] **Step 2: 跑测试确认失败**
+- [x] **Step 2: 跑测试确认失败**
 
 Run:
 
@@ -408,7 +408,7 @@ Expected: FAIL。旧 `tui.tsx` 仍导入已删除的 `@opencode-ai/plugin/tui`�
 **Files:**
 - Modify: `tui.tsx`（整文件）
 
-- [ ] **Step 1: 替换导入**
+- [x] **Step 1: 替换导入**
 
 把文件顶部的类型导入：
 
@@ -427,7 +427,7 @@ import type { JSX } from "@opentui/solid"
 import { Show, createSignal } from "solid-js"
 ```
 
-- [ ] **Step 2: 替换主题辅助函数**
+- [x] **Step 2: 替换主题辅助函数**
 
 把 `toneColor` 与 `trackColor` 替换为：
 
@@ -465,7 +465,7 @@ function trackColor(theme: ResolvedTheme) {
 }
 ```
 
-- [ ] **Step 3: 把组件 props 的主题类型改为 `ResolvedTheme`**
+- [x] **Step 3: 把组件 props 的主题类型改为 `ResolvedTheme`**
 
 对以下组件，把 `theme: TuiTheme` 改成 `theme: ResolvedTheme`：
 
@@ -476,7 +476,7 @@ function trackColor(theme: ResolvedTheme) {
 - `LedgerSecondaryRow`
 - `UsageSection`
 
-- [ ] **Step 4: 替换组件里的主题 token**
+- [x] **Step 4: 替换组件里的主题 token**
 
 在 `Bar`、`CompactRow`、`DetailedRow`、`LedgerPrimaryRow`、`LedgerSecondaryRow`、`UsageSection` 中做以下替换。**先替换 `textMuted`，再替换 `text`**——前者是后者的前缀，顺序反了会把 `textMuted` 改成 `text.baseMuted`：
 
@@ -489,7 +489,7 @@ function trackColor(theme: ResolvedTheme) {
 
 `UsageSection` 里 `toneColor(props.theme, ...)` 与 `trackColor(props.theme)` 不变。
 
-- [ ] **Step 5: 用 V2 入口替换文件末尾的 `tui` 函数与默认导出**
+- [x] **Step 5: 用 V2 入口替换文件末尾的 `tui` 函数与默认导出**
 
 删除从 `const tui: TuiPlugin = async (api, options) => {` 到文件末尾的全部内容，替换为：
 
@@ -582,7 +582,7 @@ export default Plugin.define({
 })
 ```
 
-- [ ] **Step 6: 跑 TUI 测试确认通过**
+- [x] **Step 6: 跑 TUI 测试确认通过**
 
 Run:
 
@@ -592,7 +592,7 @@ bun test tests/tui.test.tsx
 
 Expected: PASS，`1 pass`。
 
-- [ ] **Step 7: 跑全量测试与类型检查**
+- [x] **Step 7: 跑全量测试与类型检查**
 
 Run:
 
@@ -603,7 +603,7 @@ bunx tsc --noEmit
 
 Expected: 全部测试 PASS，`tsc` 无输出、退出码 0。
 
-- [ ] **Step 8: 提交**
+- [x] **Step 8: 提交**
 
 ```bash
 git add tui.tsx tests/tui.test.tsx
@@ -618,7 +618,7 @@ git commit -m "feat: 迁移 TUI 插件到 OpenCode V2 API"
 - Modify: `README.md`
 - Modify: `README.en.md`
 
-- [ ] **Step 1: 在 `README.md` 开头加版本兼容性表**
+- [x] **Step 1: 在 `README.md` 开头加版本兼容性表**
 
 在标题与第一段之后插入：
 
@@ -633,7 +633,7 @@ git commit -m "feat: 迁移 TUI 插件到 OpenCode V2 API"
 OpenCode V2 不读取 V1 的 `tui.json` 插件入口，V1 也不读取 V2 的 `cli.json`。升级 OpenCode 前先确认插件版本。
 ```
 
-- [ ] **Step 2: 替换 `README.md` 的快速开始**
+- [x] **Step 2: 替换 `README.md` 的快速开始**
 
 把“快速开始”整节替换为：
 
@@ -673,7 +673,7 @@ echo "$PWD"   # 记下这个仓库目录的绝对路径，下一步要用
 **没看到？** 插件在没有密钥、没有订阅、密钥失效、没被加载这四种情况下都会整节不显示，而且不报错。[排障指南](docs/排障指南_20260916.md#先跑这一条数据层诊断)里有一条命令，能直接查出是哪一种。
 ```
 
-- [ ] **Step 3: 替换 `README.md` 的配置节**
+- [x] **Step 3: 替换 `README.md` 的配置节**
 
 把“配置”节替换为：
 
@@ -703,7 +703,7 @@ echo "$PWD"   # 记下这个仓库目录的绝对路径，下一步要用
 V2 删除了 V1 的 `order` 选项：`sidebar.content` 没有排序能力，额度小节固定追加在内置小节之后。
 ```
 
-- [ ] **Step 4: 更新 `README.md` 的已知限制与开发节**
+- [x] **Step 4: 更新 `README.md` 的已知限制与开发节**
 
 把“只在 opencode 1.18.30 和 1.18.31 上验证过”那条改成：
 
@@ -723,7 +723,7 @@ V2 删除了 V1 的 `order` 选项：`sidebar.content` 没有排序能力，额�
 `tui.tsx` 使用 `@opencode/plugin/tui` 的 `Plugin.define({ id, setup })`；`@opentui/*` 与 `solid-js` 由 OpenCode 运行时提供，本地安装只用于类型检查和测试。
 ```
 
-- [ ] **Step 5: 同步更新 `README.en.md`**
+- [x] **Step 5: 同步更新 `README.en.md`**
 
 按同样结构更新英文版：
 
@@ -732,7 +732,7 @@ V2 删除了 V1 的 `order` 选项：`sidebar.content` 没有排序能力，额�
 - Configuration 改为对象形式，只保留 `style`，删除 `order`。
 - Known limitations 改为 “verified on OpenCode 2.1.2” 与 “V2 can only append to sidebar content”。
 
-- [ ] **Step 6: 检查旧引用**
+- [x] **Step 6: 检查旧引用**
 
 Run:
 
@@ -742,7 +742,7 @@ grep -n "tui\.json\|1\.18\.3\|order" README.md README.en.md
 
 Expected: 无输出（版本兼容表里的 `v0.1.0` 与 `1.x` 除外；如果命中，确认是历史兼容说明而不是安装指令）。
 
-- [ ] **Step 7: 提交**
+- [x] **Step 7: 提交**
 
 ```bash
 git add README.md README.en.md
@@ -761,7 +761,7 @@ git commit -m "docs: README 改为 OpenCode V2 安装与兼容性说明"
 - Modify: `docs/OpenCodeGo额度侧栏_手工验证清单_20260916.md`
 - Modify: `docs/superpowers/specs/OpenCodeGo额度侧栏_20260916.md`
 
-- [ ] **Step 1: 安装指南改为 V2**
+- [x] **Step 1: 安装指南改为 V2**
 
 `docs/安装指南_20260916.md`：
 
@@ -818,7 +818,7 @@ V2 没有 `order` 选项；额度小节固定追加在内置小节之后。
 - “下一步”里删除 `order` 链接，改为“V2 侧栏位置固定，见配置与行为契约 §5”。
 - “卸载”改为从 `~/.config/opencode/cli.json` 的 `plugins` 数组里删除本插件项。
 
-- [ ] **Step 2: 排障指南改为 V2**
+- [x] **Step 2: 排障指南改为 V2**
 
 `docs/排障指南_20260916.md`：
 
@@ -883,7 +883,7 @@ V2 的 `sidebar.content` 只支持 `append` / `prepend`，没有 `order`。本�
 - §8 的“依赖装了但运行时报找不到模块”改为说明 V2 由 OpenCode 解析 `@opencode/plugin/tui` 与 `@opentui/*`；本地依赖只给类型检查和测试。
 - “完全卸载”改为从 `cli.json` 的 `plugins` 数组删除本插件项。
 
-- [ ] **Step 3: 样式切换指南改为 V2**
+- [x] **Step 3: 样式切换指南改为 V2**
 
 `docs/OpenCodeGo样式切换指南_20260917.md`：
 
@@ -912,7 +912,7 @@ V2 的 `sidebar.content` 只支持 `append` / `prepend`，没有 `order`。本�
   - ledger 主块：`background.raised.base` 与 `text.action.primary.base`。
 - 验证步骤第 1 条改为“侧栏内置小节之后出现 OpenCode Go”。
 
-- [ ] **Step 4: 配置与行为契约改为 V2**
+- [x] **Step 4: 配置与行为契约改为 V2**
 
 `docs/配置与行为契约_20260916.md`：
 
@@ -949,7 +949,7 @@ V2 的槽位只支持 `prepend` / `append` / `before` / `after` / `replace`，�
 - §9 `PluginOptions` 改为 `{ style: StyleName }`；`parseOptions` 说明改为“解析 cli.json 传入的 options”。
 - §10 测试覆盖：`parseOptions` 从 8 例改为 5 例；总数以 `bun test` 实际输出为准；把“`tui.tsx` 渲染没有单测”改为“`tui.tsx` 用 V2 假 context 测槽位、命令与布局切换”。
 
-- [ ] **Step 5: 手工验证清单改为 V2**
+- [x] **Step 5: 手工验证清单改为 V2**
 
 `docs/OpenCodeGo额度侧栏_手工验证清单_20260916.md`：
 
@@ -964,7 +964,7 @@ V2 的槽位只支持 `prepend` / `append` / `before` / `after` / `replace`，�
 - 第 8 项末尾改为“重启后以 `cli.json` 的 `style` 为准”。
 - 卸载改为从 `cli.json` 的 `plugins` 数组删除本插件项。
 
-- [ ] **Step 6: 给 V1 设计规格加历史标注**
+- [x] **Step 6: 给 V1 设计规格加历史标注**
 
 在 `docs/superpowers/specs/OpenCodeGo额度侧栏_20260916.md` 标题下插入：
 
@@ -972,7 +972,7 @@ V2 的槽位只支持 `prepend` / `append` / `before` / `after` / `replace`，�
 > **历史文档：** 本规格描述 `v0.1.0`（OpenCode V1 TUI 插件 API）。V2 迁移见 [2026-10-22 迁移设计](2026-10-22-opencode-v2-migration-design.md)。
 ```
 
-- [ ] **Step 7: 检查旧引用**
+- [x] **Step 7: 检查旧引用**
 
 Run:
 
@@ -982,7 +982,7 @@ grep -rn "tui\.json\|api\.state\.path\.state\|TuiPlugin\|order: 350\|order.*600\
 
 Expected: 只剩历史标注、版本兼容表里的 V1 说明，以及明确写着“V1”的对比文字。安装/配置/排障步骤里不应再有 `tui.json`。
 
-- [ ] **Step 8: 提交**
+- [x] **Step 8: 提交**
 
 ```bash
 git add docs
@@ -996,7 +996,7 @@ git commit -m "docs: 中文文档迁移到 OpenCode V2"
 **Files:**
 - No code changes expected.
 
-- [ ] **Step 1: 全量测试**
+- [x] **Step 1: 全量测试**
 
 Run:
 
@@ -1006,7 +1006,7 @@ bun test
 
 Expected: 所有测试 PASS，`0 fail`。
 
-- [ ] **Step 2: 类型检查**
+- [x] **Step 2: 类型检查**
 
 Run:
 
@@ -1016,7 +1016,7 @@ bunx tsc --noEmit
 
 Expected: 无输出，退出码 0。
 
-- [ ] **Step 3: 检查空白错误**
+- [x] **Step 3: 检查空白错误**
 
 Run:
 
@@ -1026,7 +1026,7 @@ git diff --check
 
 Expected: 无输出。
 
-- [ ] **Step 4: 实际启动 OpenCode V2**
+- [x] **Step 4: 实际启动 OpenCode V2**
 
 Run（在真实终端里，不要用非交互 shell）：
 
@@ -1048,7 +1048,7 @@ opencode
 grep -i "opencode-go-usage\|tui plugin" ~/.local/share/opencode/log/opencode.log | tail -50
 ```
 
-- [ ] **Step 5: 确认 tag 与工作区状态**
+- [x] **Step 5: 确认 tag 与工作区状态**
 
 Run:
 
@@ -1064,7 +1064,7 @@ Expected:
 - 工作区干净。
 - 迁移相关 commit 在 `v0.1.0` 之后。
 
-- [ ] **Step 6: 不创建新 tag、不 push**
+- [x] **Step 6: 不创建新 tag、不 push**
 
 本计划只要求冻结 V1 tag。`v0.2.0` tag 与远端推送由用户决定。
 
@@ -1080,3 +1080,13 @@ Expected:
 - `order` 从代码、测试、README 与文档中删除。
 - README 中英文都有 V1/V2 兼容性表，并明确 `v0.1.0` 仅支持 OpenCode V1。
 - `v0.1.0` tag 保留在原 V1 提交上。
+
+## 执行记录（2026-10-22）
+
+- `v0.1.0` 已创建在 `57f4cb4`，注释写明仅支持 OpenCode V1。
+- `bun test`：76 pass / 0 fail；`bunx tsc --noEmit` 退出码 0；`git diff --check` 干净。
+- 本机 `~/.config/opencode/cli.json` 的插件路径已从 `tui.tsx` 改为仓库目录；V2 要求插件目录，写成文件会报 `configured plugin path must be a directory`。
+- OpenCode 2.1.2 的 Plugins 对话框中已能看到 `opencode-go-usage`（TUI / local）。
+- 本机 `auth.json` 的 `opencode-go.key` 调真实 usage 端点返回 401，按 `dead` 设计整节隐藏；这不是迁移回归。
+- 用本地 mock 端点（`http://127.0.0.1:18765`）做临时端到端验证：compact 和 ledger 布局都正确渲染，`/go-usage-ledger` 命令与 toast 正常，切换主题后侧栏颜色跟随。
+- 验证结束后 `usage.ts` 已恢复为 `https://opencode.ai`，mock 进程已停止，`cli.json` 的 theme 恢复为 `ayu`。
