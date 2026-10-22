@@ -558,10 +558,10 @@ describe("TUI meter glyph", () => {
 })
 
 describe("parseOptions", () => {
-  test("缺省时给出默认值：紧凑样式 + order 350", () => {
-    expect(parseOptions(undefined)).toEqual({ style: "compact", order: 350 })
-    expect(parseOptions(null)).toEqual({ style: "compact", order: 350 })
-    expect(parseOptions({})).toEqual({ style: "compact", order: 350 })
+  test("缺省时给出默认值：紧凑样式", () => {
+    expect(parseOptions(undefined)).toEqual({ style: "compact" })
+    expect(parseOptions(null)).toEqual({ style: "compact" })
+    expect(parseOptions({})).toEqual({ style: "compact" })
   })
 
   test("识别三种样式", () => {
@@ -576,35 +576,15 @@ describe("parseOptions", () => {
     }
   })
 
-  test("order 可覆盖", () => {
-    expect(parseOptions({ order: 600 }).order).toBe(600)
-    expect(parseOptions({ order: 0 }).order).toBe(0)
-    expect(parseOptions({ order: -10 }).order).toBe(-10)
-  })
-
-  test("order 非有限数字时回退到 350", () => {
-    for (const bad of ["600", Number.NaN, Number.POSITIVE_INFINITY, null, {}, []]) {
-      expect(parseOptions({ order: bad }).order).toBe(350)
-    }
-  })
-
-  test("两项可同时给", () => {
-    expect(parseOptions({ style: "detailed", order: 600 })).toEqual({
-      style: "detailed",
-      order: 600,
-    })
-  })
-
   test("整体不是对象时也不抛错", () => {
     for (const bad of ["compact", 42, true, [], () => {}]) {
-      expect(parseOptions(bad)).toEqual({ style: "compact", order: 350 })
+      expect(parseOptions(bad)).toEqual({ style: "compact" })
     }
   })
 
-  test("忽略不认识的字段", () => {
-    expect(parseOptions({ style: "detailed", nope: 1, barWidth: 99 })).toEqual({
+  test("忽略不认识的字段，包括已删除的 order", () => {
+    expect(parseOptions({ style: "detailed", order: 600, nope: 1, barWidth: 99 })).toEqual({
       style: "detailed",
-      order: 350,
     })
   })
 })

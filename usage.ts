@@ -537,26 +537,21 @@ export type PluginOptions = {
    * - `ledger`（样式 C）：5 小时窗口主指标 + 周/月次级账本行
    */
   style: StyleName
-  /** 侧栏 slot 的 order，决定小节排在哪两个内置小节之间。 */
-  order: number
 }
 
 /** `style` 缺省值。 */
 const DEFAULT_STYLE: StyleName = "compact"
 
-/** `order` 缺省值：落在内置 lsp(300) 与 todo(400) 之间。 */
-const DEFAULT_ORDER = 350
-
 /** 合法样式名集合，用于校验用户手写的配置。 */
 const STYLE_NAMES: readonly StyleName[] = ["compact", "detailed", "ledger"]
 
 /**
- * 解析 tui.json 里传给插件的 options。
+ * 解析 cli.json 里传给插件的 options。
  *
  * 入参来自用户手写的 JSON，所以任何形状都不能让它抛错：整体不是对象、字段
  * 类型不对、样式名拼错，一律回退到默认值并继续渲染，而不是让插件加载失败。
  *
- * @param raw tui.json 中 `[spec, options]` 的第二项
+ * @param raw cli.json 中插件项的 options 对象
  * @returns 补全后的配置
  */
 export function parseOptions(raw: unknown): PluginOptions {
@@ -565,12 +560,10 @@ export function parseOptions(raw: unknown): PluginOptions {
       ? (raw as Record<string, unknown>)
       : {}
   const style = source.style
-  const order = source.order
   return {
     style:
       typeof style === "string" && (STYLE_NAMES as readonly string[]).includes(style)
         ? (style as StyleName)
         : DEFAULT_STYLE,
-    order: typeof order === "number" && Number.isFinite(order) ? order : DEFAULT_ORDER,
   }
 }
