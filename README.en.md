@@ -142,7 +142,7 @@ For screenshots and how to check dark and light themes, see the [style guide](do
 - **No absolute usage**: the endpoint gives percentages and reset times, not token counts or cost.
 - **Relies on an undocumented endpoint**: if opencode changes it, the plugin may break.
 - **Tested only on OpenCode 2.1.2**: the V2 CLI plugin API may still change between releases; re-check the sidebar and commands after upgrading OpenCode.
-- **The sidebar position is fixed after the built-in sections**: V2's `sidebar.content` only supports append/prepend, so it cannot sit between `LSP` and `Todo`.
+- **The sidebar position is fixed after the built-in sections**: V2 has no `order`; slots support `prepend`/`append`/`before`/`after`/`replace`, but `sidebar.content` cannot place content between `LSP` and `Todo`, so this plugin always uses `append`.
 
 ## Documentation
 

@@ -3,7 +3,7 @@
 **日期：** 2026-09-17
 **对应实施计划：** `docs/superpowers/plans/OpenCodeGo额度侧栏_20260916.md` Task 4 Step 4 与"完成标准"
 
-自动化部分已全部通过：`bunx tsc --noEmit` 干净、`bun test` 76/76、数据层已在真实上游端点端到端验证。
+自动化部分已全部通过：`bunx tsc --noEmit` 干净、`bun test` 78/78、数据层已在真实上游端点端到端验证。
 以下 8 项是**只有你能判断**的部分（需重启 opencode、肉眼核对视觉与主题），实现过程中刻意未执行，
 以免中断你正在进行的 opencode 会话。
 
@@ -31,7 +31,7 @@ curl -s -H "authorization: Bearer $OPENCODE_GO_API_KEY" https://opencode.ai/zen/
 
 ## 3. 各列对齐与配色
 
-按当前 `style` 检查进度条、百分比、倒计时的层级和对齐：`compact` 为每档一行，`detailed` 为每档三行，`ledger` 以滚动窗口主块配合周/月次级行；`compact` 的列宽预算是标签 4 + 条 14 + 百分比 4 + 倒计时 6。
+按当前 `style` 检查进度条、百分比、倒计时的层级和对齐：`compact` 为每档一行，`detailed` 为每档三行，`ledger` 以滚动窗口主块配合周/月次级行；`compact` 的列宽预算是标签 4 + 条 14 + 百分比 4 + 倒计时 6。`detailed` 还要核对完整标签（如 `5 小时用量`）和完整倒计时措辞。
 
 同时确认：
 
@@ -55,6 +55,8 @@ curl -s -H "authorization: Bearer $OPENCODE_GO_API_KEY" https://opencode.ai/zen/
 ## 7. 密钥失效场景
 
 临时 `unset OPENCODE_GO_API_KEY`，并把 `auth.json` 里的 `opencode-go` 键改名（如 `opencode-go-bak`），重启 opencode，确认 `OpenCode Go` 整节**消失**且 TUI 无报错。改回原名（并按需恢复环境变量）后重启，确认恢复显示。
+
+再临时让上游返回 500（或断网），确认标题变为 `OpenCode Go !` 且旧数值保留；恢复网络后 `!` 应在下一次成功刷新时自动消失。
 
 ## 8. 命令切换
 

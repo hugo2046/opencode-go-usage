@@ -90,7 +90,7 @@ V1 的 `TuiTheme` 换成 V2 的 `ResolvedTheme`。组件改为直接读取 V2 �
 
 1. `const opts = parseOptions(ctx.options)`，得到 `style`。
 2. 建立 `style`、`usage`、`stale`、`now` 四个 Solid signal。
-3. 用 `createRefresher` 接入 `resolveKey(() => resolveKey(defaultStateDir()))`、`fetchUsage`、`Date.now`。
+3. 用 `createRefresher` 接入 `resolveKey: () => resolveKey(defaultStateDir())`、`fetchUsage`、`Date.now`。
 4. `ctx.data.on("session.idle", () => void refresh(false))`。
 5. `setInterval` 兜底刷新（300 秒）与倒计时重算（60 秒）。
 6. `ctx.keymap.layer` 注册三个样式命令；`run` 中 `setStyle` 并 `ctx.ui.toast.show`。
@@ -186,9 +186,9 @@ V2 的 `plugins` 项必须是**插件目录**，不能直接写 `tui.tsx` 文件
 
 - `tests/usage.test.ts`：删除 `order` 相关断言与用例，其余保持；`parseOptions` 只断言 `style`。
 - `tests/tui.test.tsx`：构造 V2 假 context：
-  - `options: { style: "compact" }`
+  - `options: { style: "compact" }`（另有一个 `detailed` 用例）
   - `theme`：用 `RGBA.fromHex` 构造 `text.base`、`text.muted`、`text.feedback.*`、`background.base`、`background.raised.base`、`border.base`、`text.action.primary.base`
-  - `data.on: () => () => {}`
+  - `data.on`：记录 `session.idle` handler，供 soft-error 用例触发第二次刷新
   - `keymap.layer(factory)`：执行一次 factory，收集 `commands`
   - `ui.slot(claim)`：收集 claim，返回 unsubscribe
   - `ui.toast.show`：记录消息
@@ -199,7 +199,9 @@ V2 的 `plugins` 项必须是**插件目录**，不能直接写 `tui.tsx` 文件
   3. `testRender` 渲染 claim，断言包含 `滚动`。
   4. 调用 `/go-usage-ledger` 命令的 `run`，重新渲染，断言包含 `5 小时滚动窗口`。
   5. 断言 toast 收到切换消息。
-  6. 执行 cleanup，断言取消订阅与定时器不抛错。
+  6. 执行 cleanup，断言取消订阅，并断言 `clearInterval` 调用两次。
+  7. 追加 `detailed` 用例，断言渲染出 `5 小时用量`。
+  8. 追加 soft-error 用例：首次成功、推进假时钟 21 秒后触发 `session.idle`，第二次返回 500，断言标题变为 `OpenCode Go !` 且旧快照仍在。
 
 ### 6.2 命令
 

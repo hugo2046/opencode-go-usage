@@ -52,11 +52,11 @@ function toneColor(theme: ResolvedTheme, tone: Tone) {
 /**
  * 进度条轨道（未用部分）的颜色。
  *
- * 优先用主题的 `border`：它的语义就是「在背景上可见的边框色」，任何主题都得
- * 保证这一点，所以深色浅色都能跟随，不需要按 themeMode 分叉。但个别主题
+ * 优先用主题的 `border.base`：它的语义就是「在背景上可见的边框色」，任何主题都得
+ * 保证这一点，所以深色浅色都能跟随，不需要按 ctx.themeMode 分叉。但个别主题
  * 可能把它设得和背景几乎一样，所以再做一次运行时亮度差检查，不合格就回退到
- * textMuted。不能用 borderSubtle / backgroundElement —— 它们的语义是「几乎
- * 不可见的分隔」，ayu 下与 background 的亮度差只有 0.03 / 0.01，做轨道等于没画。
+ * text.muted。不要用更暗的背景层级做轨道——它们只是「几乎不可见的表面」，
+ * 画出来等于没画。
  *
  * @param theme V2 解析后的主题 token
  * @returns 轨道色

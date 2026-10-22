@@ -1084,9 +1084,9 @@ Expected:
 ## 执行记录（2026-10-22）
 
 - `v0.1.0` 已创建在 `57f4cb4`，注释写明仅支持 OpenCode V1。
-- `bun test`：76 pass / 0 fail；`bunx tsc --noEmit` 退出码 0；`git diff --check` 干净。
+- `bun test`：78 pass / 0 fail；`bunx tsc --noEmit` 退出码 0；`git diff --check` 干净。
 - 本机 `~/.config/opencode/cli.json` 的插件路径已从 `tui.tsx` 改为仓库目录；V2 要求插件目录，写成文件会报 `configured plugin path must be a directory`。
 - OpenCode 2.1.2 的 Plugins 对话框中已能看到 `opencode-go-usage`（TUI / local）。
 - 本机 `auth.json` 的 `opencode-go.key` 调真实 usage 端点返回 401，按 `dead` 设计整节隐藏；这不是迁移回归。
-- 用本地 mock 端点（`http://127.0.0.1:18765`）做临时端到端验证：compact 和 ledger 布局都正确渲染，`/go-usage-ledger` 命令与 toast 正常，切换主题后侧栏颜色跟随。
+- 用本地 mock 端点（`http://127.0.0.1:18765`）做临时端到端验证：compact 和 ledger 布局都正确渲染，`/go-usage-ledger` 命令与 toast 正常，切换主题后侧栏颜色跟随。`detailed` 布局与 `soft-error` 的 `OpenCode Go !` 标题由单测覆盖；真实宿主未逐项手工核对，已列入手工验证清单。
 - 验证结束后 `usage.ts` 已恢复为 `https://opencode.ai`，mock 进程已停止，`cli.json` 的 theme 恢复为 `ayu`。

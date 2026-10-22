@@ -28,12 +28,12 @@ export const ENV_KEY = "OPENCODE_GO_API_KEY"
 export const AUTH_PROVIDER = "opencode-go"
 
 /**
- * opencode 默认 state 目录，用于 api.state.path.state 尚未就绪时兜底。
+ * opencode 默认 data 目录，auth.json 所在处。
  *
  * @param env 环境变量表
  * @param platform 平台标识
  * @param home 用户主目录
- * @returns state 目录绝对路径
+ * @returns data 目录绝对路径
  */
 export function defaultStateDir(
   env: Record<string, string | undefined> = process.env,
@@ -59,9 +59,8 @@ export function resolveKey(
 ): string | null {
   const fromEnv = env[ENV_KEY]?.trim()
   if (fromEnv) return fromEnv
-  // 多候选：opencode 的 api.state.path.state 指向 XDG_STATE_HOME 下的运行时
-  // 状态目录（kv.json / locks / model.json），而 auth.json 存在 XDG_DATA_HOME
-  // 下的数据目录。两者是 XDG 规范里不同的目录，所以要逐个候选去找。
+  // 多候选：auth.json 位于 opencode 的 data 目录（XDG_DATA_HOME）。
+  // 保留候选列表是为了兼容不同安装布局与测试；V2 的生产调用点只传 data 目录。
   const dirs = typeof stateDir === "string" ? [stateDir] : stateDir
   for (const dir of dirs) {
     if (!dir) continue
@@ -441,10 +440,10 @@ export function relativeLuma(color: RgbLike | undefined | null): number {
 /**
  * 两个颜色的亮度差是否够大。
  *
- * 用来在运行时挑进度条轨道色：主题的 `border` 语义上应当在背景上可见，
- * 但个别主题可能把它设得和背景几乎一样（ayu 的 `borderSubtle` 与
- * `background` 只差 0.03，拿来做轨道会完全看不见）。这个判断让渲染层
- * 能在真实颜色不合格时回退，而不是靠猜主题是深色还是浅色。
+ * 用来在运行时挑进度条轨道色：主题的 `border.base` 语义上应当在背景上可见，
+ * 但个别主题可能把它设得和背景几乎一样（比如 ayu 的暗色边框与背景亮度差很小，
+ * 拿来做轨道会完全看不见）。这个判断让渲染层能在真实颜色不合格时回退，
+ * 而不是靠猜主题是深色还是浅色。
  *
  * @param a 颜色 A
  * @param b 颜色 B

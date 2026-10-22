@@ -140,7 +140,7 @@ slash 命令只切换当前会话；重启后会回到 `cli.json` 里设定的�
 - **没有绝对用量**：接口只给百分比和重置时间，不给 token 数或金额。
 - **依赖未公开的接口**：如果 opencode 修改了这个接口，插件可能会失效。
 - **只在 OpenCode 2.1.2 上验证过**：V2 的 CLI 插件 API 仍可能随版本调整；升级 OpenCode 后请重新验证侧栏与命令。
-- **侧栏位置固定在内置小节之后**：V2 的 `sidebar.content` 只支持 append/prepend，不能插到 `LSP` 与 `Todo` 之间。
+- **侧栏位置固定在内置小节之后**：V2 没有 `order`；槽位支持 `prepend`/`append`/`before`/`after`/`replace`，但 `sidebar.content` 这一层无法插到 `LSP` 与 `Todo` 之间，本插件固定用 `append`。
 
 ## 文档
 

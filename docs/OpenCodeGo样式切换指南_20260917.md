@@ -56,7 +56,7 @@
 
 把 style 改成 compact、detailed 或 ledger，然后完整退出并重新启动 OpenCode。
 
-V2 没有 `order` 选项：`sidebar.content` 只能 append/prepend，额度小节固定在内置小节之后。
+V2 没有 `order` 选项：槽位支持 `prepend` / `append` / `before` / `after` / `replace`，但无法插到内置小节之间；本插件固定用 `append`，额度小节出现在内置小节之后。
 
 ## 临时切换当前会话
 
