@@ -23,7 +23,7 @@
 curl -s -H "authorization: Bearer $OPENCODE_GO_API_KEY" https://opencode.ai/zen/go/v1/usage
 ```
 
-未设 `OPENCODE_GO_API_KEY` 环境变量时，密钥在 `~/.local/share/opencode/auth.json` 的 `opencode-go.key` 字段（不要把密钥值贴到聊天或日志里）。
+未设 `OPENCODE_GO_API_KEY` 环境变量时，密钥优先取 credential store 里 `opencode-go` 的 active 凭据（Connect / `opencode auth login` 写入），回退到 `~/.local/share/opencode/auth.json` 的 `opencode-go.key`（不要把密钥值贴到聊天或日志里）。
 
 比对返回 JSON 的 `rolling` / `weekly` / `monthly` 三个 `percent` 与侧栏显示是否一致。
 
@@ -54,7 +54,9 @@ curl -s -H "authorization: Bearer $OPENCODE_GO_API_KEY" https://opencode.ai/zen/
 
 ## 7. 密钥失效场景
 
-临时 `unset OPENCODE_GO_API_KEY`，并把 `auth.json` 里的 `opencode-go` 键改名（如 `opencode-go-bak`），重启 opencode，确认 `OpenCode Go` 整节**消失**且 TUI 无报错。改回原名（并按需恢复环境变量）后重启，确认恢复显示。
+用一个无效密钥启动：`OPENCODE_GO_API_KEY=invalid opencode`，确认 `OpenCode Go` 整节**消失**且 TUI 无报错（环境变量优先级最高，会压过 credential store）。退出后恢复正常启动，确认恢复显示。
+
+> 不要再通过改 `auth.json` 来模拟"没有密钥"——只要 credential store 里有 active 凭据，插件就仍然能取到 key。
 
 再临时让上游返回 500（或断网），确认标题变为 `OpenCode Go !` 且旧数值保留；恢复网络后 `!` 应在下一次成功刷新时自动消失。
 

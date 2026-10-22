@@ -1,10 +1,14 @@
 import { afterEach, describe, expect, spyOn, test } from "bun:test"
+import { mkdtempSync } from "node:fs"
+import { tmpdir } from "node:os"
+import { join } from "node:path"
 import type { Context, KeymapCommand, SlotClaim } from "@opencode/plugin/tui/context"
 import { RGBA } from "@opentui/core"
 import { testRender } from "@opentui/solid"
 
 const originalFetch = globalThis.fetch
 const originalApiKey = process.env.OPENCODE_GO_API_KEY
+const originalXdgDataHome = process.env.XDG_DATA_HOME
 const renderers: Array<{ destroy: () => void }> = []
 
 afterEach(() => {
@@ -12,6 +16,8 @@ afterEach(() => {
   globalThis.fetch = originalFetch
   if (originalApiKey === undefined) delete process.env.OPENCODE_GO_API_KEY
   else process.env.OPENCODE_GO_API_KEY = originalApiKey
+  if (originalXdgDataHome === undefined) delete process.env.XDG_DATA_HOME
+  else process.env.XDG_DATA_HOME = originalXdgDataHome
 })
 
 function usageResponse() {
@@ -73,7 +79,8 @@ describe("V2 TUI 接线", () => {
       options: { style: "compact" },
       theme: fakeTheme(),
       data: {
-        on: (_type: string, _handler: () => void) => {
+        on: (type: string, _handler: () => void) => {
+          if (type !== "session.idle") return () => {}
           return () => {
             offIdleCalls++
           }
@@ -197,8 +204,8 @@ describe("V2 TUI 接线", () => {
       options: { style: "compact" },
       theme: fakeTheme(),
       data: {
-        on: (_type: string, handler: () => void) => {
-          idle = handler
+        on: (type: string, handler: () => void) => {
+          if (type === "session.idle") idle = handler
           return () => {}
         },
       },
@@ -234,5 +241,42 @@ describe("V2 TUI 接线", () => {
     } finally {
       nowSpy.mockRestore()
     }
+  })
+
+  test("没有环境变量时使用 credential store 里的 active key，而不是 auth.json", async () => {
+    delete process.env.OPENCODE_GO_API_KEY
+    process.env.XDG_DATA_HOME = mkdtempSync(join(tmpdir(), "ocgo-tui-"))
+
+    let authorization = ""
+    globalThis.fetch = async (_input, init) => {
+      authorization = new Headers(init?.headers).get("authorization") ?? ""
+      return usageResponse()
+    }
+
+    const { default: plugin } = await import("../tui.tsx")
+    const ctx = {
+      options: { style: "compact" },
+      theme: fakeTheme(),
+      data: { on: () => () => {} },
+      keymap: { layer: () => {} },
+      ui: {
+        slot: () => () => {},
+        toast: { show: () => {} },
+      },
+      client: {
+        credential: {
+          list: async () => [
+            { integrationID: "opencode-go", active: false, value: { type: "key", key: "stale" } },
+            { integrationID: "opencode-go", active: true, value: { type: "key", key: "oc_sk_active" } },
+          ],
+        },
+      },
+    }
+
+    const cleanup = await plugin.setup(ctx as unknown as Context)
+    await new Promise((resolve) => setTimeout(resolve, 10))
+
+    expect(authorization).toBe("Bearer oc_sk_active")
+    await cleanup?.()
   })
 })

@@ -117,7 +117,8 @@ For screenshots and how to check dark and light themes, see the [style guide](do
 **Key lookup**, in this order. The plugin never stores its own copy:
 
 1. The `OPENCODE_GO_API_KEY` environment variable
-2. `opencode-go.key` in `auth.json` inside opencode's data directory (on macOS / Linux, `~/.local/share/opencode` by default)
+2. The active `opencode-go` credential in opencode's credential store (written by `opencode auth login` / Connect)
+3. `opencode-go.key` in `auth.json` inside opencode's data directory as a legacy fallback (on macOS / Linux, `~/.local/share/opencode` by default)
 
 **When it refreshes**:
 

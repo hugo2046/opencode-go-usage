@@ -115,7 +115,8 @@ slash 命令只切换当前会话；重启后会回到 `cli.json` 里设定的�
 **密钥**：按以下顺序查找，插件自己不保存任何副本：
 
 1. 环境变量 `OPENCODE_GO_API_KEY`
-2. opencode 数据目录里的 `auth.json`，取其中的 `opencode-go.key`（macOS / Linux 默认在 `~/.local/share/opencode`）
+2. OpenCode credential store 里 `opencode-go` 的 active 凭据（`opencode auth login` / Connect 写入的那条）
+3. opencode 数据目录里的 `auth.json`，取其中的 `opencode-go.key`（旧版兜底；macOS / Linux 默认在 `~/.local/share/opencode`）
 
 **刷新时机**：
 

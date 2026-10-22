@@ -11,6 +11,7 @@ import {
   BAR_GLYPH,
   COUNTDOWN_WIDTH,
   DEFAULT_BASE_URL,
+  ENV_KEY,
   ROWS,
   barFilled,
   createRefresher,
@@ -19,6 +20,7 @@ import {
   formatCountdown,
   formatCountdownShort,
   formatPercent,
+  pickActiveKey,
   pickTrackColor,
   parseOptions,
   resolveKey,
@@ -354,16 +356,20 @@ export default Plugin.define({
     const [usage, setUsage] = createSignal<Usage | null>(null)
     const [stale, setStale] = createSignal(false)
     const [now, setNow] = createSignal(Date.now())
+    // Connect 之后的 active 凭据在 OpenCode credential store 里；auth.json 可能
+    // 还留着已停用/过期的旧 key，所以优先用 credential store 的 active key。
+    const [credentialKey, setCredentialKey] = createSignal<string | null>(null)
 
     // 节流 / 单飞 / dead 闩锁这套状态机是纯逻辑，提取到 usage.ts 的 createRefresher
     // 里做了单测；这里只负责把 solid 的 setter 和真实的 resolveKey / fetchUsage /
     // Date.now 接进去，行为与提取前完全等价。
-    const { refresh } = createRefresher({
+    const { refresh, reset } = createRefresher({
       // 惰性解析密钥：会话中途新增密钥也能被拾取。
       //
       // V2 没有 api.state.path.state；auth.json 固定在 opencode 的 data 目录
       // （XDG_DATA_HOME，即 defaultStateDir() 算出的 ~/.local/share/opencode）。
-      resolveKey: () => resolveKey(defaultStateDir()),
+      // 优先级：环境变量 > credential store 的 active key > auth.json 兜底。
+      resolveKey: () => resolveKey(defaultStateDir(), process.env, credentialKey()),
       fetchUsage: (key) => fetchUsage(key, DEFAULT_BASE_URL),
       now: () => Date.now(),
       onUsage: (next) => {
@@ -420,10 +426,42 @@ export default Plugin.define({
       ),
     })
 
-    void refresh(true)
+    let disposed = false
+
+    // 不要先用 auth.json 的旧 key 刷新：命中 401 会打开 dead 闩锁，之后即使
+    // credential store 里有新 key 也不会再请求。先解析 active 凭据，再首次刷新。
+    const loadCredentialKey = async (reload: boolean) => {
+      try {
+        const credentials = await ctx.client?.credential?.list?.()
+        if (disposed) return
+        setCredentialKey(pickActiveKey(credentials ?? []))
+      } catch {
+        // 远程服务或旧版本没有 credential API 时，保留 auth.json 兜底。
+        if (disposed) return
+      }
+      if (!reload) return
+      // Connect / 切换凭据后要清掉 dead 闩锁，否则旧 key 的 401 会挡住新 key。
+      reset()
+      void refresh(true)
+    }
+
+    // 凭据变化（Connect、切换账号、删除）时重新解析并刷新。
+    const offCredentialUpdated = ctx.data.on("credential.updated", () => void loadCredentialKey(true))
+    const offCredentialSwitched = ctx.data.on("credential.switched", () => void loadCredentialKey(true))
+
+    if (process.env[ENV_KEY]?.trim()) {
+      void refresh(true)
+    } else {
+      void loadCredentialKey(false).finally(() => {
+        if (!disposed) void refresh(true)
+      })
+    }
 
     return () => {
+      disposed = true
       offIdle()
+      offCredentialUpdated()
+      offCredentialSwitched()
       clearInterval(fallback)
       clearInterval(tick)
     }

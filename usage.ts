@@ -47,18 +47,26 @@ export function defaultStateDir(
 }
 
 /**
- * 解析 OpenCode Go 的 API Key：环境变量优先，其次 opencode 自己的 auth.json。
+ * 解析 OpenCode Go 的 API Key：环境变量优先，其次是当前 active 凭据，
+ * 最后回退到 opencode 自己的 auth.json。
+ *
+ * V2 的 Connect 会把新凭据写进 credential store，auth.json 里可能还留着
+ * 已停用/过期的旧 key；调用方应优先传入 {@link pickActiveKey} 的结果。
  *
  * @param stateDir opencode 的 state 目录
  * @param env 环境变量表
+ * @param credentialKey 当前 active 凭据里的 key；可选
  * @returns key 字符串；找不到、为空白或文件损坏时返回 null
  */
 export function resolveKey(
   stateDir: string | readonly string[],
   env: Record<string, string | undefined> = process.env,
+  credentialKey?: string | null,
 ): string | null {
   const fromEnv = env[ENV_KEY]?.trim()
   if (fromEnv) return fromEnv
+  const fromCredential = credentialKey?.trim()
+  if (fromCredential) return fromCredential
   // 多候选：auth.json 位于 opencode 的 data 目录（XDG_DATA_HOME）。
   // 保留候选列表是为了兼容不同安装布局与测试；V2 的生产调用点只传 data 目录。
   const dirs = typeof stateDir === "string" ? [stateDir] : stateDir
@@ -72,6 +80,36 @@ export function resolveKey(
     } catch {
       // 该候选目录的 auth.json 缺失、无权限或 JSON 损坏，试下一个候选
     }
+  }
+  return null
+}
+
+/** credential store 里与取 key 相关的字段子集。 */
+export type CredentialEntry = {
+  readonly integrationID?: string
+  readonly active?: boolean
+  readonly value?: {
+    readonly type?: string
+    readonly key?: string
+  }
+}
+
+/**
+ * 从 OpenCode credential store 中挑出当前 active 的 key 凭据。
+ *
+ * @param credentials credential.list() 返回的凭据列表
+ * @param integrationID 目标 integration，默认 opencode-go
+ * @returns 去空白后的 key；没有可用凭据时返回 null
+ */
+export function pickActiveKey(
+  credentials: readonly CredentialEntry[],
+  integrationID: string = AUTH_PROVIDER,
+): string | null {
+  for (const credential of credentials) {
+    if (credential.integrationID !== integrationID || credential.active !== true) continue
+    if (credential.value?.type !== "key") continue
+    const key = credential.value.key?.trim()
+    if (key) return key
   }
   return null
 }
@@ -215,6 +253,8 @@ export type Refresher = {
    * @param force 跳过节流；启动与兜底定时器用 true，事件触发用 false
    */
   refresh: (force: boolean) => Promise<void>
+  /** 清除 dead 闩锁与节流时间戳；凭据变化后调用，允许用新密钥重试。 */
+  reset: () => void
 }
 
 /**
@@ -274,7 +314,12 @@ export function createRefresher(deps: RefresherDeps): Refresher {
     }
   }
 
-  return { refresh }
+  const reset = () => {
+    dead = false
+    lastAt = 0
+  }
+
+  return { refresh, reset }
 }
 
 /** 进度条格数。 */

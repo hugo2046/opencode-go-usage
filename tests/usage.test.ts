@@ -18,6 +18,7 @@ import {
   formatPercent,
   hasEnoughContrast,
   parseOptions,
+  pickActiveKey,
   pickTrackColor,
   relativeLuma,
   resolveKey,
@@ -106,6 +107,44 @@ describe("resolveKey", () => {
 
   test("空候选列表返回 null 而不抛错", () => {
     expect(resolveKey([], {})).toBeNull()
+  })
+
+  // OpenCode V2 的 Connect 会把新凭据写进 credential store，而 auth.json 里可能
+  // 还留着已停用/过期的旧 API key。credential key 必须压过 auth.json 兜底。
+  test("credential key 高于 auth.json，低于环境变量", () => {
+    const dir = makeStateDir(JSON.stringify({ [AUTH_PROVIDER]: { key: "stale" } }))
+    expect(resolveKey(dir, {}, "active")).toBe("active")
+    expect(resolveKey(dir, { [ENV_KEY]: "from-env" }, "active")).toBe("from-env")
+    expect(resolveKey(dir, {}, "  ")).toBe("stale")
+  })
+})
+
+describe("pickActiveKey", () => {
+  test("从凭据列表里取 active 的 key 凭据", () => {
+    expect(
+      pickActiveKey([
+        { integrationID: AUTH_PROVIDER, active: false, value: { type: "key", key: "stale" } },
+        { integrationID: AUTH_PROVIDER, active: true, value: { type: "key", key: "active" } },
+      ]),
+    ).toBe("active")
+  })
+
+  test("忽略其他 integration、非 key 凭据和空白 key", () => {
+    expect(
+      pickActiveKey([
+        { integrationID: "anthropic", active: true, value: { type: "key", key: "other" } },
+        { integrationID: AUTH_PROVIDER, active: true, value: { type: "oauth", key: "oauth" } },
+        { integrationID: AUTH_PROVIDER, active: true, value: { type: "key", key: "   " } },
+        { integrationID: AUTH_PROVIDER, active: true, value: { type: "key", key: "ok" } },
+      ]),
+    ).toBe("ok")
+  })
+
+  test("没有可用凭据时返回 null", () => {
+    expect(pickActiveKey([])).toBeNull()
+    expect(
+      pickActiveKey([{ integrationID: AUTH_PROVIDER, active: false, value: { type: "key", key: "stale" } }]),
+    ).toBeNull()
   })
 })
 
@@ -329,6 +368,28 @@ describe("createRefresher", () => {
     now += 100_000
     await refresh(true)
     expect(calls).toBe(1)
+  })
+
+  test("reset 清除 dead 闩锁，允许用新密钥重试", async () => {
+    let calls = 0
+    const { refresh, reset } = createRefresher({
+      resolveKey: () => "sk-test",
+      fetchUsage: async (): Promise<Snapshot> => {
+        calls++
+        return calls === 1 ? { kind: "dead", message: "expired" } : { kind: "ok", usage: SAMPLE_USAGE }
+      },
+      now: () => 0,
+      onUsage: () => {},
+      onDead: () => {},
+      onStale: () => {},
+    })
+    await refresh(true)
+    expect(calls).toBe(1)
+    await refresh(true)
+    expect(calls).toBe(1)
+    reset()
+    await refresh(true)
+    expect(calls).toBe(2)
   })
 
   test("soft-error 时不调用 onUsage（保留上次快照）而是 onStale(true)", async () => {
