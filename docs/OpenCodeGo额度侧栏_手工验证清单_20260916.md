@@ -3,7 +3,7 @@
 **日期：** 2026-09-17
 **对应实施计划：** `docs/superpowers/plans/OpenCodeGo额度侧栏_20260916.md` Task 4 Step 4 与"完成标准"
 
-自动化部分已全部通过：`bunx tsc --noEmit` 干净、`bun test` 79/79、数据层已在真实上游端点端到端验证。
+自动化部分已全部通过：`bunx tsc --noEmit` 干净、`bun test` 76/76、数据层已在真实上游端点端到端验证。
 以下 8 项是**只有你能判断**的部分（需重启 opencode、肉眼核对视觉与主题），实现过程中刻意未执行，
 以免中断你正在进行的 opencode 会话。
 
@@ -11,14 +11,11 @@
 
 重启 opencode，进入任意会话，确认侧栏出现 `OpenCode Go` 小节，且：
 
-- 位置在 `Context` / `MCP` / `LSP` **之下**；
-- 若当前会话有 todo 或文件改动，`OpenCode Go` 应在 **Todo / Files 之上**（插件 `order: 350`，落在内置 `lsp`=300 与 `todo`=400 之间）；
-- 三个窗口顺序是 **滚动 → 本周 → 本月**；具体行数与信息密度由 `style` 决定，统一包含标签、细线 meter、百分比和倒计时。
-- 在 `tui.json` 里分别设置 `style` 为 `compact`、`detailed`、`ledger`，重启后布局分别切换成功。
+- 位置在内置 `Context` / `MCP` / `LSP` / `Todo` / `Files` 小节**之后**（V2 的 `sidebar.content` 只能 append）；
+- 三个窗口顺序是 **滚动 → 本周 → 本月**；具体行数与信息密度由 `style` 决定，统一包含标签、细线 meter、百分比和倒计时；
+- 在 `cli.json` 里分别设置 `style` 为 `compact`、`detailed`、`ledger`，重启后布局分别切换成功。
 
-> 如果你更希望额度沉到侧栏最底（排在 Todo / Files 之下），把 `tui.tsx` 里的 `order: 350` 改成 `order: 600` 即可。
->
-> 三种样式的实际运行截图与切换方法见[样式切换指南](OpenCodeGo样式切换指南_20260917.md)。
+> V2 没有 `order` 选项，位置不能通过配置改变。三种样式的实际运行截图与切换方法见[样式切换指南](OpenCodeGo样式切换指南_20260917.md)。
 
 ## 2. 百分比交叉核对
 
@@ -53,7 +50,7 @@ curl -s -H "authorization: Bearer $OPENCODE_GO_API_KEY" https://opencode.ai/zen/
 
 ## 6. 主题跟随
 
-分别在浅色与深色主题下验证，确认文字、进度条、ledger 主块背景和轨道都跟随 `theme.current`：正常态 `success` 色，≥70% `warning`，≥90% 或 `rate-limited` `error`。轨道不能融进背景。
+分别在浅色与深色主题下验证，确认文字、进度条、ledger 主块背景和轨道都跟随 V2 主题 token：正常态 `text.feedback.success.base`，≥70% `text.feedback.warning.base`，≥90% 或 `rate-limited` `text.feedback.error.base`。轨道用 `border.base`，不能融进背景。
 
 ## 7. 密钥失效场景
 
@@ -67,8 +64,8 @@ curl -s -H "authorization: Bearer $OPENCODE_GO_API_KEY" https://opencode.ai/zen/
 - `/go-usage-detailed`
 - `/go-usage-ledger`
 
-命令切换只影响当前 TUI 会话；重启后以 `tui.json` 的 `style` 为准。
+命令切换只影响当前 TUI 会话；重启后以 `cli.json` 的 `style` 为准。
 
 ## 卸载
 
-删除 `~/.config/opencode/tui.json` 即可完全回退。该文件由本次工作新建，你原有的 `opencode.jsonc` 未被改动。
+从 `~/.config/opencode/cli.json` 的 `plugins` 数组里删掉本插件项即可完全回退。该文件由本次工作修改，你原有的 `opencode.jsonc` 未被改动。

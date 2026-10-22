@@ -4,9 +4,9 @@
 
 ## 前置条件
 
-- 已安装并注册 opencode-go-usage TUI 插件。
-- OpenCode 版本 ≥ 1.18.30。
-- 已重启 OpenCode。tui.json 只在进程启动时读取。
+- 已安装并注册 opencode-go-usage CLI 插件。
+- OpenCode 版本 ≥ 2.1.2。
+- 已重启 OpenCode。cli.json 只在客户端启动时读取。
 
 ## 三种样式
 
@@ -40,31 +40,23 @@
 
 ## 持久设置默认样式
 
-编辑 OpenCode 的 TUI 配置文件：
+编辑 OpenCode 的 CLI 配置文件：
 
 ```jsonc
 {
-  "$schema": "https://opencode.ai/tui.json",
-  "plugin": [
-    ["/绝对路径/opencode-go-usage/tui.tsx", {
-      "style": "ledger",
-      "order": 600
-    }]
+  "$schema": "https://opencode.ai/v2/cli.json",
+  "plugins": [
+    {
+      "package": "/绝对路径/opencode-go-usage/tui.tsx",
+      "options": { "style": "ledger" }
+    }
   ]
 }
 ```
 
 把 style 改成 compact、detailed 或 ledger，然后完整退出并重新启动 OpenCode。
 
-如果当前 plugin 还是字符串形式：
-
-```jsonc
-"plugin": [
-  ["/绝对路径/opencode-go-usage/tui.tsx", { "style": "compact" }]
-]
-```
-
-order 不是样式开关。350 会把小节放在 LSP 与 Todo 之间，600 会把它放到侧栏更靠下的位置。
+V2 没有 `order` 选项：`sidebar.content` 只能 append/prepend，额度小节固定在内置小节之后。
 
 ## 临时切换当前会话
 
@@ -76,7 +68,7 @@ order 不是样式开关。350 会把小节放在 LSP 与 Todo 之间，600 会�
 /go-usage-ledger
 ```
 
-命令只改变当前 TUI 会话的布局，不重新请求额度、不改变密钥、不改变刷新间隔。重启后仍以 tui.json 的 style 为准。
+命令只改变当前 TUI 会话的布局，不重新请求额度、不改变密钥、不改变刷新间隔。重启后仍以 cli.json 的 style 为准。
 
 这些命令使用 OpenCode 新版 TUI 的 keymap 注册入口；如果宿主没有可用的 keymap 能力，插件仍保留侧栏和配置切换。
 
@@ -84,17 +76,17 @@ order 不是样式开关。350 会把小节放在 LSP 与 Todo 之间，600 会�
 
 三种样式都从 OpenCode 当前主题读取颜色：
 
-- 正常用量：success。
-- 70% 及以上：warning。
-- 90% 及以上或 rate-limited：error。
-- 未用轨道：border；如果和背景对比不足，回退到 textMuted。
-- ledger 主块：backgroundPanel 与 borderActive。
+- 正常用量：`text.feedback.success.base`。
+- 70% 及以上：`text.feedback.warning.base`。
+- 90% 及以上或 rate-limited：`text.feedback.error.base`。
+- 未用轨道：`border.base`；如果和背景对比不足，回退到 `text.muted`。
+- ledger 主块：`background.raised.base` 与 `text.action.primary.base`。
 
-切换主题后不需要改插件配置。若轨道仍然看不见，请先确认主题本身的 textMuted 与 background 是否有足够对比。
+切换主题后不需要改插件配置。若轨道仍然看不见，请先确认主题本身的 `text.muted` 与 `background.base` 是否有足够对比。
 
 ## 验证是否生效
 
-1. 重启 OpenCode，确认侧栏出现 OpenCode Go。
+1. 重启 OpenCode，确认侧栏内置小节之后出现 OpenCode Go。
 2. 确认 rolling 标签对应 5 小时窗口。
 3. 依次检查三种 style 的布局是否与上面的截图相符。
 4. 在浅色和深色主题各检查一次文字、细线 meter、百分比和 ledger 主块。

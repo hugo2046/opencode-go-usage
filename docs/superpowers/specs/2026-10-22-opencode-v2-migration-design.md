@@ -173,7 +173,7 @@ V2 使用全局 `~/.config/opencode/cli.json`：
     "@opentui/core": "0.6.6",
     "@opentui/solid": "0.6.6",
     "@types/bun": "^1.3.14",
-    "solid-js": "1.9.15"
+    "solid-js": "1.9.12"
   }
 }
 ```

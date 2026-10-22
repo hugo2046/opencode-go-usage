@@ -1,5 +1,7 @@
 # OpenCode Go 额度侧栏 — 设计规格
 
+> **历史文档：** 本规格描述 `v0.1.0`（OpenCode V1 TUI 插件 API）。V2 迁移见 [2026-10-22 迁移设计](2026-10-22-opencode-v2-migration-design.md)。
+
 **日期：** 2026-09-16
 **目标：** 一个 opencode TUI 插件，在侧栏 `sidebar_content` 区域（Context / MCP / LSP 之下）纵向展示 OpenCode Go 套餐的 5 小时 / 每周 / 每月三档额度，含进度条与重置倒计时。
 
