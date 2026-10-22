@@ -50,7 +50,7 @@ OpenCode Go 按三档额度限流：5 小时滚动窗口、每周、每月。ope
 git clone https://github.com/hugo2046/opencode-go-usage.git
 cd opencode-go-usage
 bun install
-echo "$PWD/tui.tsx"   # 记下这个绝对路径，下一步要用
+echo "$PWD"   # 记下这个仓库目录的绝对路径，下一步要用
 ```
 
 **2. 注册插件**
@@ -81,7 +81,7 @@ echo "$PWD/tui.tsx"   # 记下这个绝对路径，下一步要用
   "$schema": "https://opencode.ai/v2/cli.json",
   "plugins": [
     {
-      "package": "<仓库绝对路径>/tui.tsx",
+      "package": "<仓库绝对路径>",
       "options": { "style": "ledger" }
     }
   ]

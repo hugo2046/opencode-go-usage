@@ -648,7 +648,7 @@ OpenCode V2 不读取 V1 的 `tui.json` 插件入口，V1 也不读取 V2 的 `c
 git clone https://github.com/hugo2046/opencode-go-usage.git
 cd opencode-go-usage
 bun install
-echo "$PWD/tui.tsx"   # 记下这个绝对路径，下一步要用
+echo "$PWD"   # 记下这个仓库目录的绝对路径，下一步要用
 ```
 
 **2. 注册插件**
@@ -663,6 +663,8 @@ echo "$PWD/tui.tsx"   # 记下这个绝对路径，下一步要用
 ```
 
 如果已经有 `cli.json`，把路径追加到 `plugins` 数组，保留你原有的 `theme`、`session` 和其他插件。
+
+> `plugins` 里必须是**插件目录**的绝对路径（仓库根目录），不能直接写 `tui.tsx` 文件；V2 会读取该目录的 `package.json`，通过 `exports["./tui"]` 找到入口。写成文件路径时日志会报 `configured plugin path must be a directory`。
 
 **3. 重启 opencode**
 
@@ -685,7 +687,7 @@ echo "$PWD/tui.tsx"   # 记下这个绝对路径，下一步要用
   "$schema": "https://opencode.ai/v2/cli.json",
   "plugins": [
     {
-      "package": "<仓库绝对路径>/tui.tsx",
+      "package": "<仓库绝对路径>",
       "options": { "style": "ledger" }
     }
   ]
@@ -778,7 +780,7 @@ V2 的 CLI 插件注册在 `~/.config/opencode/cli.json`。**不是** `opencode.
 CLI_JSON="$HOME/.config/opencode/cli.json" REPO="$REPO" python3 -c '
 import json, os, pathlib
 p = pathlib.Path(os.environ["CLI_JSON"]); repo = os.environ["REPO"]
-entry = f"{repo}/tui.tsx"
+entry = repo
 p.parent.mkdir(parents=True, exist_ok=True)
 cfg = json.loads(p.read_text()) if p.exists() else {"$schema": "https://opencode.ai/v2/cli.json"}
 plugins = cfg.setdefault("plugins", [])
@@ -793,7 +795,7 @@ print("已写入:", p)
 ```json
 {
   "$schema": "https://opencode.ai/v2/cli.json",
-  "plugins": ["/Users/你/workspace/opencode-go-usage/tui.tsx"]
+  "plugins": ["/Users/你/workspace/opencode-go-usage"]
 }
 ```
 
@@ -802,7 +804,7 @@ print("已写入:", p)
 ```jsonc
 "plugins": [
   {
-    "package": "/绝对路径/opencode-go-usage/tui.tsx",
+    "package": "/绝对路径/opencode-go-usage",
     "options": { "style": "detailed" }
   }
 ]
@@ -831,14 +833,15 @@ cat ~/.config/opencode/cli.json
 ```jsonc
 {
   "$schema": "https://opencode.ai/v2/cli.json",
-  "plugins": ["/绝对路径/opencode-go-usage/tui.tsx"]
+  "plugins": ["/绝对路径/opencode-go-usage"]
 }
 ```
 
 - 三个典型错误改为：
   - 文件不存在 → 按安装指南创建 `cli.json`。
   - 写进了 `opencode.json` → `opencode.json` 只加载 server 端插件；CLI 插件放进 `cli.json` 的 `plugins`。
-  - 路径相对或写错 → `plugins` 里必须是 `tui.tsx` 的绝对路径。
+  - 路径指向 `tui.tsx` 文件 → 日志报 `configured plugin path must be a directory`；V2 的 `plugins` 必须是**插件目录**（仓库根目录）。
+  - 路径相对或写错 → `plugins` 里必须是插件目录的绝对路径。
 - 版本检查改为 `opencode --version` 需要 `2.1.2` 或更高；V2 CLI 插件 API 在 2.1.2 上验证。
 - 探针插件整段替换为 V2 版本：
 
@@ -892,7 +895,7 @@ V2 的 `sidebar.content` 只支持 `append` / `prepend`，没有 `order`。本�
   "$schema": "https://opencode.ai/v2/cli.json",
   "plugins": [
     {
-      "package": "/绝对路径/opencode-go-usage/tui.tsx",
+      "package": "/绝对路径/opencode-go-usage",
       "options": { "style": "ledger" }
     }
   ]

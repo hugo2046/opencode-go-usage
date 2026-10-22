@@ -112,18 +112,18 @@ V2 使用全局 `~/.config/opencode/cli.json`：
 ```json
 {
   "$schema": "https://opencode.ai/v2/cli.json",
-  "plugins": ["/绝对路径/opencode-go-usage/tui.tsx"]
+  "plugins": ["/绝对路径/opencode-go-usage"]
 }
 ```
 
-带配置时使用对象形式：
+V2 的 `plugins` 项必须是**插件目录**，不能直接写 `tui.tsx` 文件；OpenCode 会读取该目录的 `package.json`，通过 `exports["./tui"]` 找到 TUI 入口。带配置时使用对象形式：
 
 ```json
 {
   "$schema": "https://opencode.ai/v2/cli.json",
   "plugins": [
     {
-      "package": "/绝对路径/opencode-go-usage/tui.tsx",
+      "package": "/绝对路径/opencode-go-usage",
       "options": { "style": "ledger" }
     }
   ]

@@ -47,7 +47,7 @@
   "$schema": "https://opencode.ai/v2/cli.json",
   "plugins": [
     {
-      "package": "/绝对路径/opencode-go-usage/tui.tsx",
+      "package": "/绝对路径/opencode-go-usage",
       "options": { "style": "ledger" }
     }
   ]

@@ -52,7 +52,7 @@ This plugin puts all three windows in the sidebar, after the built-in `Context` 
 git clone https://github.com/hugo2046/opencode-go-usage.git
 cd opencode-go-usage
 bun install
-echo "$PWD/tui.tsx"   # note this absolute path, you'll need it next
+echo "$PWD"   # note this repo directory's absolute path, you'll need it next
 ```
 
 **2. Register the plugin**
@@ -83,7 +83,7 @@ Change the plugin entry in `cli.json` from a string to an object:
   "$schema": "https://opencode.ai/v2/cli.json",
   "plugins": [
     {
-      "package": "<absolute repo path>/tui.tsx",
+      "package": "<absolute repo path>",
       "options": { "style": "ledger" }
     }
   ]
