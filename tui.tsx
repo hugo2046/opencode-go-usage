@@ -271,19 +271,21 @@ function LedgerSecondaryRow(props: {
  * @param props.now 当前时间戳 accessor
  */
 function UsageSection(props: {
-  theme: ResolvedTheme
+  theme: () => ResolvedTheme
   data: () => Usage
   style: () => StyleName
   stale: () => boolean
   now: () => number
 }) {
+  // 主题必须按 accessor 读取：V2 的 ctx.theme 是 getter，setup 时捕获对象
+  // 会错过后续主题切换。槽位渲染时读取 props.theme() 才能跟踪宿主主题。
   // 作为 box 的函数子节点插入，OpenTUI Solid 会为它建立 render effect。
   // 因此 style / stale 在命令或刷新状态变化后都会重新计算，而不是只在
   // 外层 Show 第一次挂载时读取一次。
   const renderContent = () => {
     const currentStyle = props.style()
     const title = (
-      <text fg={props.theme.text.base}>
+      <text fg={props.theme().text.base}>
         <b>{props.stale() ? "OpenCode Go !" : "OpenCode Go"}</b>
       </text>
     )
@@ -292,19 +294,19 @@ function UsageSection(props: {
       return [
         title,
         <LedgerPrimaryRow
-          theme={props.theme}
+          theme={props.theme()}
           win={() => props.data().rolling}
           now={props.now}
         />,
         <LedgerSecondaryRow
-          theme={props.theme}
+          theme={props.theme()}
           label="周"
           period="weekly"
           win={() => props.data().weekly}
           now={props.now}
         />,
         <LedgerSecondaryRow
-          theme={props.theme}
+          theme={props.theme()}
           label="月"
           period="monthly"
           win={() => props.data().monthly}
@@ -318,14 +320,14 @@ function UsageSection(props: {
       ...ROWS.map((row) =>
         currentStyle === "detailed" ? (
           <DetailedRow
-            theme={props.theme}
+            theme={props.theme()}
             label={row.labelLong}
             win={() => props.data()[row.key]}
             now={props.now}
           />
         ) : (
           <CompactRow
-            theme={props.theme}
+            theme={props.theme()}
             label={row.label}
             win={() => props.data()[row.key]}
             now={props.now}
@@ -407,7 +409,7 @@ export default Plugin.define({
         <Show when={usage()}>
           {(data) => (
             <UsageSection
-              theme={ctx.theme}
+              theme={() => ctx.theme}
               data={data}
               style={style}
               stale={stale}
